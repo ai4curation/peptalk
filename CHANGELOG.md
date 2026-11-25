@@ -2,7 +2,7 @@
 
 ## 0.1.0 (first release)
 
-peptalk asks a frontier LLM what a protein sequence says, from sequence alone, by direct single-shot API calls.
+peptalk (on PyPI as `peptalk-llm`; import and command `peptalk`) asks a frontier LLM what a protein sequence says, from sequence alone, by direct single-shot API calls.
 
 - **Providers:** direct clients for Anthropic (Messages API), Gemini and OpenAI. Each question is one user message
   with no system prompt and no tools. An input-token check confirms that nothing besides the prompt was sent.
@@ -26,6 +26,6 @@ peptalk asks a frontier LLM what a protein sequence says, from sequence alone, b
   - Parquet, for querying with DuckDB;
   - GFF3 of located features;
   - FASTA of annotated sequences named by MD5, for DIAMOND or BLAST.
-- **REST API:** FastAPI (`peptalk[server]`, `peptalk serve`), with synchronous annotation, background and
+- **REST API:** FastAPI (`peptalk-llm[server]`, `peptalk serve`), with synchronous annotation, background and
   batch jobs, and lookup by sequence MD5.
 - **Docs:** `docs/design.md`, `docs/templates.md` and `docs/provider-options.html`.

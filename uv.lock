@@ -1025,7 +1025,7 @@ wheels = [
 ]
 
 [[package]]
-name = "peptalk"
+name = "peptalk-llm"
 source = { editable = "." }
 dependencies = [
     { name = "anthropic" },

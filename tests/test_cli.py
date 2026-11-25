@@ -110,7 +110,7 @@ def test_missing_extra_is_explained(monkeypatch, db):
     real = importlib.util.find_spec
     monkeypatch.setattr(importlib.util, "find_spec", lambda n, *a: None if n == "google" else real(n, *a))
     result = runner.invoke(app, ["annotate", FASTA, "-m", "gemini-4-neon", "--db", db])
-    assert result.exit_code != 0 and "peptalk[gemini]" in result.output
+    assert result.exit_code != 0 and "peptalk-llm[gemini]" in result.output
 
 
 def test_export_parquet(tmp_path, db):

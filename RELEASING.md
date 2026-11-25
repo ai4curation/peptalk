@@ -6,8 +6,8 @@
    publish it.
 
 That's it. The `Publish Python Package` workflow (`.github/workflows/pypi-publish.yaml`) builds the package and
-uploads it to [PyPI](https://pypi.org/project/peptalk/) by trusted publishing, in the `release` environment. The
+uploads it to [PyPI](https://pypi.org/project/peptalk-llm/) by trusted publishing, in the `release` environment. The
 version comes from the tag (uv-dynamic-versioning), so nothing in the code needs editing.
 
-PyPI trusted publisher settings: project `peptalk`, owner `ai4curation`, repository `peptalk`, workflow
+PyPI trusted publisher settings: project `peptalk-llm`, owner `ai4curation`, repository `peptalk`, workflow
 `pypi-publish.yaml`, environment `release`.

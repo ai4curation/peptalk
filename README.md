@@ -14,17 +14,18 @@ come from the [fable-sequence-to-function](https://github.com/ai4curation/fable-
 [manuscript.pdf](https://github.com/ai4curation/fable-sequence-to-function/blob/main/manuscript.pdf), with a
 [summary of results](https://ai4curation.io/fable-sequence-to-function/); the preprint is forthcoming.
 
-The package, the import and the command are all `peptalk`.
+On PyPI the package is `peptalk-llm`, because the name `peptalk` was too close to an existing project; the
+import and the command are both `peptalk`.
 
 ## Install
 
 ```bash
-pip install peptalk                 # Claude models
-pip install 'peptalk[all]'          # adds Gemini, OpenAI, the REST API and Parquet export
+pip install peptalk-llm                 # Claude models
+pip install 'peptalk-llm[all]'          # adds Gemini, OpenAI, the REST API and Parquet export
 ```
 
-With [uv](https://docs.astral.sh/uv/): `uv tool install 'peptalk[all]'`, or try it without
-installing: `uvx peptalk --help`.
+With [uv](https://docs.astral.sh/uv/): `uv tool install 'peptalk-llm[all]'`, or try it without
+installing: `uvx --from peptalk-llm peptalk --help`.
 
 The extras are `gemini`, `openai`, `server` (REST API) and `parquet`; `all` is all four.
 
@@ -138,7 +139,7 @@ so a pipeline can be checked for free.
 ## REST API
 
 ```bash
-pip install 'peptalk[server]'
+pip install 'peptalk-llm[server]'
 peptalk serve                                  # http://127.0.0.1:8000, OpenAPI docs at /docs
 ```
 

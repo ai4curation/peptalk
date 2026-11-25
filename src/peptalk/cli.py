@@ -451,7 +451,7 @@ def export_cmd(
         try:
             n = to_parquet(records, parquet)
         except ImportError as e:
-            raise typer.BadParameter("Parquet export needs pyarrow: pip install 'peptalk[parquet]'") from e
+            raise typer.BadParameter("Parquet export needs pyarrow: pip install 'peptalk-llm[parquet]'") from e
         typer.echo(f"{n} records written to {parquet}", err=True)
         return
     _write(records, Format.jsonl, output)
@@ -497,7 +497,7 @@ def serve(
 
         from peptalk.server import create_app
     except ImportError as e:
-        raise typer.BadParameter("the API needs FastAPI and uvicorn: pip install 'peptalk[server]'") from e
+        raise typer.BadParameter("the API needs FastAPI and uvicorn: pip install 'peptalk-llm[server]'") from e
     uvicorn.run(create_app(_store(db), max_sync_questions=max_sync), host=host, port=port)
 
 

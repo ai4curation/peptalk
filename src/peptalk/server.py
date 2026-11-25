@@ -1,4 +1,4 @@
-"""A REST-like API over the annotator (``pip install 'peptalk[server]'``; run with ``peptalk serve``).
+"""A REST-like API over the annotator (``pip install 'peptalk-llm[server]'``; run with ``peptalk serve``).
 
 Endpoints (OpenAPI docs at ``/docs`` and ``/openapi.json``):
 
