@@ -11,7 +11,7 @@ from typing import Any, Protocol
 
 from pydantic import BaseModel
 
-from llm_protein_annotator.schema import Completion
+from peptalk.schema import Completion
 
 
 class ProviderError(RuntimeError):

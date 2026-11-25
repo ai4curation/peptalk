@@ -5,8 +5,8 @@ import httpx2
 import openai
 import pytest
 
-from llm_protein_annotator.providers import ProviderError
-from llm_protein_annotator.providers.openai import OpenAIProvider
+from peptalk.providers import ProviderError
+from peptalk.providers.openai import OpenAIProvider
 
 BODY = {
     "id": "resp_1",

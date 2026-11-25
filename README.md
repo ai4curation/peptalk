@@ -1,6 +1,8 @@
-# llm-protein-annotator
+# peptalk
 
-Annotate protein sequences with a frontier language model, from the sequence alone: Pfam domains with
+**peptalk: ask a frontier LLM what a protein sequence says, from sequence alone.**
+
+Despite the name, peptalk works on full-length proteins, not just peptides. It returns Pfam domains with
 boundaries, transmembrane helices, signal peptides, catalytic residues that are present or substituted,
 secondary structure and contacts, and function.
 
@@ -10,17 +12,17 @@ priced, and logged with full provenance in a local SQLite store, which also serv
 come from the [fable-sequence-to-function](https://github.com/ai4curation/fable-sequence-to-function) study
 (fs2f).
 
-The command is `lpa` (also installed as `llm-protein-annotator`).
+The package, the import and the command are all `peptalk`.
 
 ## Install
 
 ```bash
-pip install llm-protein-annotator                 # Claude models
-pip install 'llm-protein-annotator[all]'          # adds Gemini, OpenAI, the REST API and Parquet export
+pip install peptalk                 # Claude models
+pip install 'peptalk[all]'          # adds Gemini, OpenAI, the REST API and Parquet export
 ```
 
-With [uv](https://docs.astral.sh/uv/): `uv tool install 'llm-protein-annotator[all]'`, or try it without
-installing: `uvx --from llm-protein-annotator lpa --help`.
+With [uv](https://docs.astral.sh/uv/): `uv tool install 'peptalk[all]'`, or try it without
+installing: `uvx peptalk --help`.
 
 The extras are `gemini`, `openai`, `server` (REST API) and `parquet`; `all` is all four.
 
@@ -40,8 +42,8 @@ The provider follows from the model name (`claude-*`, `gemini-*`, `gpt-*`), or s
 cost total go to the terminal:
 
 ```bash
-lpa annotate proteins.fasta -t features -t active-site -o results.jsonl
-lpa summarize results.jsonl
+peptalk annotate proteins.fasta -t features -t active-site -o results.jsonl
+peptalk summarize results.jsonl
 ```
 
 ```
@@ -57,52 +59,52 @@ the second.)
 
 ```bash
 printf '>my_protein\nMKTAYIAKQRQISFVKSHFSRQLEERLGLIEVQAPILSRVGDGTQDNLSGAEKAVQVKVKALPDAQ\n' \
-  | lpa annotate - -t active-site -m claude-opus-5-5 -e medium -f tsv
+  | peptalk annotate - -t active-site -m claude-opus-5-5 -e medium -f tsv
 ```
 
 **Add the shuffled control.** The same task is also asked of a shuffled copy of each sequence. An answer is
 flagged when the shuffled copy also gets a domain, an "active" call or a recognised name:
 
 ```bash
-lpa annotate proteins.fasta -t features --shuffle-control -o results.jsonl
+peptalk annotate proteins.fasta -t features --shuffle-control -o results.jsonl
 ```
 
 **Many sequences: a batch.** A batch costs half as much and returns within 24 hours. Sequences that already
 have stored answers are left out:
 
 ```bash
-lpa batch submit proteins.fasta -t features --manifest run1.json
-lpa batch status run1.json
-lpa batch collect run1.json -o results.jsonl
+peptalk batch submit proteins.fasta -t features --manifest run1.json
+peptalk batch status run1.json
+peptalk batch collect run1.json -o results.jsonl
 ```
 
 **Inspect the log and cache.** Every call is logged, and asking again reuses the stored answer:
 
 ```bash
-lpa log                                   # the 20 most recent calls
-lpa log --sql "SELECT model, count(*) AS calls, sum(thinking_tokens) AS thinking, round(sum(cost_usd), 2) AS usd
+peptalk log                                   # the 20 most recent calls
+peptalk log --sql "SELECT model, count(*) AS calls, sum(thinking_tokens) AS thinking, round(sum(cost_usd), 2) AS usd
                FROM calls GROUP BY model"
-lpa annotate proteins.fasta --no-reuse    # ask again anyway
+peptalk annotate proteins.fasta --no-reuse    # ask again anyway
 ```
 
 **Export and share:**
 
 ```bash
-lpa export -o mine.jsonl                  # every logged call, one JSON record per line
-lpa import theirs.jsonl                   # merge someone else's export; calls already present are skipped
-lpa export --parquet calls.parquet        # for DuckDB, pandas, polars
-lpa fasta -o annotated.fasta              # each annotated sequence once, named by its MD5, for DIAMOND or BLAST
+peptalk export -o mine.jsonl                  # every logged call, one JSON record per line
+peptalk import theirs.jsonl                   # merge someone else's export; calls already present are skipped
+peptalk export --parquet calls.parquet        # for DuckDB, pandas, polars
+peptalk fasta -o annotated.fasta              # each annotated sequence once, named by its MD5, for DIAMOND or BLAST
 ```
 
-`lpa --help` lists every command and `lpa COMMAND --help` its options. `lpa tasks` lists the tasks with their
-prompt versions. `lpa tasks --show active-site` prints a task's full prompt. `--provider stub` calls no model,
+`peptalk --help` lists every command and `peptalk COMMAND --help` its options. `peptalk tasks` lists the tasks with their
+prompt versions. `peptalk tasks --show active-site` prints a task's full prompt. `--provider stub` calls no model,
 so a pipeline can be checked for free.
 
 ## REST API
 
 ```bash
-pip install 'llm-protein-annotator[server]'
-lpa serve                                  # http://127.0.0.1:8000, OpenAPI docs at /docs
+pip install 'peptalk[server]'
+peptalk serve                                  # http://127.0.0.1:8000, OpenAPI docs at /docs
 ```
 
 | Endpoint | What it does |
@@ -129,9 +131,9 @@ authentication of its own, so it listens on localhost unless you pass `--host`.
 ## Python
 
 ```python
-from llm_protein_annotator import Annotator, Store, read_fasta
-from llm_protein_annotator.providers import provider_for
-from llm_protein_annotator.store import default_db_path
+from peptalk import Annotator, Store, read_fasta
+from peptalk.providers import provider_for
+from peptalk.store import default_db_path
 
 model = "claude-fable-5-2"
 annotator = Annotator(provider_for(model), model=model, effort="high", store=Store(default_db_path()))
@@ -142,8 +144,8 @@ for a in annotator.annotate(read_fasta("proteins.fasta"), ["active-site"], shuff
 
 Each result is an `Annotation` (a Pydantic model). It carries the parsed `answer`, the reply `text`, the
 `checks`, `usage` (input, output and thinking tokens) and `cost_usd`, plus provenance: `seq_md5`,
-`prompt_version`, `served_model` and `options`. Batches are in `llm_protein_annotator.batch`
-(`submit`, `collect`) and the API in `llm_protein_annotator.server.create_app`.
+`prompt_version`, `served_model` and `options`. Batches are in `peptalk.batch`
+(`submit`, `collect`) and the API in `peptalk.server.create_app`.
 
 ## Tasks
 
@@ -186,7 +188,7 @@ Treat every answer as a hypothesis to verify.
 ## The store: log and cache
 
 Every call that reaches a provider is logged in a SQLite file, failures and refusals included. The file is
-`~/.local/share/llm-protein-annotator/lpa.db` by default; change it with `--db` or `$LPA_DB`. Each record holds:
+`~/.local/share/peptalk/peptalk.db` by default; change it with `--db` or `$PEPTALK_DB`. Each record holds:
 
 - the sequence and its MD5 (the checksum UniParc uses)
 - the prompt version and hash
@@ -211,25 +213,25 @@ DuckDB reads both the live SQLite store and Parquet exports:
 
 ```sql
 INSTALL sqlite; LOAD sqlite;
-ATTACH '~/.local/share/llm-protein-annotator/lpa.db' AS lpa (TYPE sqlite, READ_ONLY);
+ATTACH '~/.local/share/peptalk/peptalk.db' AS peptalk (TYPE sqlite, READ_ONLY);
 
 SELECT model, effort, count(*) AS calls, sum(thinking_tokens) AS thinking, round(sum(cost_usd), 2) AS usd
-FROM lpa.calls GROUP BY ALL;
+FROM peptalk.calls GROUP BY ALL;
 
 -- the full record is JSON in the `record` column
 SELECT id, json_extract_string(record, '$.answer.catalytically_active') AS active
-FROM lpa.calls WHERE task = 'active-site' AND condition = 'real';
+FROM peptalk.calls WHERE task = 'active-site' AND condition = 'real';
 
--- a Parquet export (lpa export --parquet calls.parquet): one row per call, deduplicated by uid
+-- a Parquet export (peptalk export --parquet calls.parquet): one row per call, deduplicated by uid
 SELECT seq_md5, task, model, protein_name, confidence FROM 'calls.parquet' WHERE condition = 'real';
 ```
 
 ## Sharing results
 
-`lpa export` writes self-contained JSON records, each with its sequence, `seq_md5` and call `uid`.
-`lpa import` adds only the calls a store does not already have, so exports from several people pool without
-duplicates. `lpa fasta` writes each annotated sequence once, named by its MD5, so DIAMOND or BLAST hits join
-back to the records on `seq_md5`. [docs/shared-database.md](https://github.com/ai4curation/llm-protein-annotator/blob/main/docs/shared-database.md) sketches a shared,
+`peptalk export` writes self-contained JSON records, each with its sequence, `seq_md5` and call `uid`.
+`peptalk import` adds only the calls a store does not already have, so exports from several people pool without
+duplicates. `peptalk fasta` writes each annotated sequence once, named by its MD5, so DIAMOND or BLAST hits join
+back to the records on `seq_md5`. [docs/shared-database.md](https://github.com/ai4curation/peptalk/blob/main/docs/shared-database.md) sketches a shared,
 searchable database built from these pieces; it is designed, not built.
 
 ## Cost
@@ -274,7 +276,7 @@ From the fs2f tests (November 2026; small test sets, sampled answers, mostly thr
   substitutions.
 
 None of this compares the models with specialised predictors such as InterProScan, DeepTMHMM, SignalP or
-AlphaFold. [docs/provider-options.html](https://github.com/ai4curation/llm-protein-annotator/blob/main/docs/provider-options.html) records how the provider layer was chosen.
+AlphaFold. [docs/provider-options.html](https://github.com/ai4curation/peptalk/blob/main/docs/provider-options.html) records how the provider layer was chosen.
 
 ## Development
 

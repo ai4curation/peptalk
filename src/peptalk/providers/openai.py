@@ -1,4 +1,4 @@
-"""OpenAI models through the Responses API (``pip install 'llm-protein-annotator[openai]'``).
+"""OpenAI models through the Responses API (``pip install 'peptalk[openai]'``).
 
 The request carries only the prompt and a reasoning effort: no tools and no instructions. Batches use the OpenAI
 Batch API on the ``/v1/responses`` endpoint. This route was not tested in fs2f.
@@ -13,8 +13,8 @@ from typing import Any
 import openai
 from openai.types.responses import Response
 
-from llm_protein_annotator.providers.base import BatchStatus, ProviderError
-from llm_protein_annotator.schema import Completion, Usage
+from peptalk.providers.base import BatchStatus, ProviderError
+from peptalk.schema import Completion, Usage
 
 DONE_STATES = {"completed", "failed", "expired", "cancelled"}
 
@@ -85,7 +85,7 @@ class OpenAIProvider:
             for cid, p in items
         ]
         upload = self.client.files.create(
-            file=("lpa-batch.jsonl", io.BytesIO("\n".join(lines).encode())), purpose="batch"
+            file=("peptalk-batch.jsonl", io.BytesIO("\n".join(lines).encode())), purpose="batch"
         )
         batch = self.client.batches.create(input_file_id=upload.id, endpoint="/v1/responses", completion_window="24h")
         return str(batch.id)

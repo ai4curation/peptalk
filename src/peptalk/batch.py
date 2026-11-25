@@ -5,9 +5,9 @@ the batch and every question in it, with each prompt's counted input tokens; ``s
 reads the results, logs each call in the store (so later live runs reuse them), and returns annotation records.
 Questions with a stored answer are not submitted.
 
->>> from llm_protein_annotator.fasta import SequenceRecord
->>> from llm_protein_annotator.annotator import build_questions
->>> from llm_protein_annotator.providers import get_provider
+>>> from peptalk.fasta import SequenceRecord
+>>> from peptalk.annotator import build_questions
+>>> from peptalk.providers import get_provider
 >>> qs = build_questions([SequenceRecord(id="sp|P1|X", sequence="MKTAYIAK")], ["features"], True)
 >>> provider = get_provider("stub")
 >>> m = submit(provider, qs, model="stub", effort="high")
@@ -24,13 +24,13 @@ from pathlib import Path
 
 from pydantic import BaseModel
 
-from llm_protein_annotator.annotator import Question, fill, finalize, new_annotation, now
-from llm_protein_annotator.fasta import SequenceRecord, safe_id
-from llm_protein_annotator.pricing import Price, price_for
-from llm_protein_annotator.providers.base import Provider
-from llm_protein_annotator.schema import Annotation
-from llm_protein_annotator.store import Store
-from llm_protein_annotator.tasks import get_task
+from peptalk.annotator import Question, fill, finalize, new_annotation, now
+from peptalk.fasta import SequenceRecord, safe_id
+from peptalk.pricing import Price, price_for
+from peptalk.providers.base import Provider
+from peptalk.schema import Annotation
+from peptalk.store import Store
+from peptalk.tasks import get_task
 
 
 class BatchEntry(BaseModel):

@@ -1,8 +1,8 @@
 import json
 
-from llm_protein_annotator.annotator import Annotator
-from llm_protein_annotator.providers import ProviderError
-from llm_protein_annotator.store import Store
+from peptalk.annotator import Annotator
+from peptalk.providers import ProviderError
+from peptalk.store import Store
 
 
 def test_annotate_with_shuffled_control(records, features_reply, scripted):
@@ -49,7 +49,7 @@ def test_store_logs_and_reuses(records, features_reply, scripted):
 
 
 def test_reuse_follows_sequence_not_identifier(records, features_reply, scripted):
-    from llm_protein_annotator.fasta import SequenceRecord
+    from peptalk.fasta import SequenceRecord
 
     store = Store(":memory:")
     provider = scripted(lambda p: features_reply)

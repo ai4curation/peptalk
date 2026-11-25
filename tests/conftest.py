@@ -3,8 +3,8 @@ from pathlib import Path
 
 import pytest
 
-from llm_protein_annotator.fasta import read_fasta
-from llm_protein_annotator.schema import Completion, Usage
+from peptalk.fasta import read_fasta
+from peptalk.schema import Completion, Usage
 
 DATA = Path(__file__).parent / "data"
 

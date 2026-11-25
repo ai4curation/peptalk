@@ -19,7 +19,7 @@ from pathlib import Path
 
 from pydantic import BaseModel
 
-from llm_protein_annotator.schema import Usage
+from peptalk.schema import Usage
 
 
 class Price(BaseModel):

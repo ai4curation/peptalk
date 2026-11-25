@@ -4,8 +4,8 @@ import pytest
 from conftest import DATA
 from typer.testing import CliRunner
 
-from llm_protein_annotator import __version__
-from llm_protein_annotator.cli import app
+from peptalk import __version__
+from peptalk.cli import app
 
 runner = CliRunner()
 FASTA = str(DATA / "example.fasta")
@@ -19,7 +19,7 @@ def run(*args, input=None):
 
 @pytest.fixture
 def db(tmp_path):
-    return str(tmp_path / "lpa.db")
+    return str(tmp_path / "peptalk.db")
 
 
 def stub(*args, db, input=None):
@@ -87,10 +87,10 @@ def test_unknown_task(db):
 
 
 def test_batch_cycle(tmp_path, db, monkeypatch):
-    from llm_protein_annotator.providers.stub import StubProvider
+    from peptalk.providers.stub import StubProvider
 
     shared = StubProvider()  # one instance, so the batch it holds survives between commands
-    monkeypatch.setattr("llm_protein_annotator.cli._provider", lambda *a, **k: shared)
+    monkeypatch.setattr("peptalk.cli._provider", lambda *a, **k: shared)
     manifest = tmp_path / "m.json"
     run("batch", "submit", FASTA, "--manifest", str(manifest), "--db", db, "-m", "stub")
     assert len(json.loads(manifest.read_text())["entries"]) == 3
@@ -107,7 +107,7 @@ def test_missing_extra_is_explained(monkeypatch, db):
     real = importlib.util.find_spec
     monkeypatch.setattr(importlib.util, "find_spec", lambda n, *a: None if n == "google" else real(n, *a))
     result = runner.invoke(app, ["annotate", FASTA, "-m", "gemini-4-neon", "--db", db])
-    assert result.exit_code != 0 and "llm-protein-annotator[gemini]" in result.output
+    assert result.exit_code != 0 and "peptalk[gemini]" in result.output
 
 
 def test_export_parquet(tmp_path, db):

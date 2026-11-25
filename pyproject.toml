@@ -1,7 +1,7 @@
 [project]
-name = "llm-protein-annotator"
+name = "peptalk"
 version = "0.1.0"
-description = "Annotate protein sequences with frontier language models from sequence alone: domains, membrane features, active sites, structure and function"
+description = "Ask a frontier LLM what a protein sequence says, from sequence alone: domains, membrane features, active sites, structure and function of full-length proteins"
 readme = "README.md"
 authors = [
     { name = "Chris Mungall", email = "cjm@berkeleybop.org" },
@@ -37,14 +37,13 @@ server = [
 parquet = [
     "pyarrow>=26.0.1",
 ]
-all = ["llm-protein-annotator[gemini,openai,server,parquet]"]
+all = ["peptalk[gemini,openai,server,parquet]"]
 
 [project.scripts]
-lpa = "llm_protein_annotator.cli:app"
-llm-protein-annotator = "llm_protein_annotator.cli:app"
+peptalk = "peptalk.cli:app"
 
 [project.urls]
-Homepage = "https://github.com/ai4curation/llm-protein-annotator"
+Homepage = "https://github.com/ai4curation/peptalk"
 Study = "https://github.com/ai4curation/fable-sequence-to-function"
 
 [build-system]

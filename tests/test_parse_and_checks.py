@@ -1,7 +1,7 @@
-from llm_protein_annotator.annotator import parse_answer
-from llm_protein_annotator.checks import check_answer, control_check
-from llm_protein_annotator.schema import ActiveSiteAnswer, FeaturesAnswer
-from llm_protein_annotator.tasks import TASKS
+from peptalk.annotator import parse_answer
+from peptalk.checks import check_answer, control_check
+from peptalk.schema import ActiveSiteAnswer, FeaturesAnswer
+from peptalk.tasks import TASKS
 
 
 def test_fs2f_features_reply(features_reply, records):

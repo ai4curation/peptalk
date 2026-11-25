@@ -2,7 +2,7 @@ import hashlib
 
 import pytest
 
-from llm_protein_annotator.fasta import parse_fasta, shuffle_sequence
+from peptalk.fasta import parse_fasta, shuffle_sequence
 
 
 def test_example_file(records):

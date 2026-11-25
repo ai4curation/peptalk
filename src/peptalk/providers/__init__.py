@@ -1,4 +1,4 @@
-"""Model providers. Each turns one prompt into a :class:`~llm_protein_annotator.schema.Completion`.
+"""Model providers. Each turns one prompt into a :class:`~peptalk.schema.Completion`.
 
 >>> sorted(PROVIDERS)
 ['anthropic', 'gemini', 'openai', 'stub']
@@ -11,7 +11,7 @@ from __future__ import annotations
 import importlib.util
 from typing import Any
 
-from llm_protein_annotator.providers.base import Provider, ProviderError
+from peptalk.providers.base import Provider, ProviderError
 
 PROVIDERS = ("anthropic", "gemini", "openai", "stub")
 
@@ -32,26 +32,26 @@ def require_extra(name: str) -> None:
     """Raise a clear ImportError when a provider's SDK (an optional extra) is not installed."""
     module = EXTRAS.get(name)
     if module and importlib.util.find_spec(module.split(".")[0]) is None:
-        raise ImportError(f"the {name} provider needs its SDK: pip install 'llm-protein-annotator[{name}]'")
+        raise ImportError(f"the {name} provider needs its SDK: pip install 'peptalk[{name}]'")
 
 
 def get_provider(name: str, **options: Any) -> Provider:
     """Build a provider by name. Gemini and OpenAI need the ``gemini`` / ``openai`` extras installed."""
     require_extra(name)
     if name == "anthropic":
-        from llm_protein_annotator.providers.anthropic import AnthropicProvider
+        from peptalk.providers.anthropic import AnthropicProvider
 
         return AnthropicProvider(**options)
     if name == "gemini":
-        from llm_protein_annotator.providers.gemini import GeminiProvider
+        from peptalk.providers.gemini import GeminiProvider
 
         return GeminiProvider(**options)
     if name == "openai":
-        from llm_protein_annotator.providers.openai import OpenAIProvider
+        from peptalk.providers.openai import OpenAIProvider
 
         return OpenAIProvider(**options)
     if name == "stub":
-        from llm_protein_annotator.providers.stub import StubProvider
+        from peptalk.providers.stub import StubProvider
 
         return StubProvider()
     raise ValueError(f"unknown provider {name!r}; choose from {', '.join(PROVIDERS)}")

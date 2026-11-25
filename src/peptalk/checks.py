@@ -5,7 +5,7 @@ the model for a confidence. Instead each answer gets checks a curator would run 
 residue exist at the stated position, do ranges fall inside the sequence, do identifiers have a valid form, and
 did the shuffled copy of the sequence (if asked) get the same kind of call.
 
->>> from llm_protein_annotator.schema import ActiveSiteAnswer
+>>> from peptalk.schema import ActiveSiteAnswer
 >>> a = ActiveSiteAnswer(catalytic_residues=[{"role": "base", "residue": "D", "position": 3},
 ...                                           {"role": "nucleophile", "residue": "S", "position": 1}])
 >>> [(c.name, c.passed) for c in check_answer("active-site", a, "MKDA")]
@@ -19,7 +19,7 @@ from collections.abc import Iterable
 
 from pydantic import BaseModel
 
-from llm_protein_annotator.schema import (
+from peptalk.schema import (
     ActiveSiteAnswer,
     Check,
     CombinedAnswer,

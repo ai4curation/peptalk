@@ -15,8 +15,8 @@ from typing import Any
 import anthropic
 from anthropic.types.messages import MessageBatchSucceededResult
 
-from llm_protein_annotator.providers.base import BatchStatus, ProviderError
-from llm_protein_annotator.schema import Completion, Usage
+from peptalk.providers.base import BatchStatus, ProviderError
+from peptalk.schema import Completion, Usage
 
 DEFAULT_MAX_TOKENS = 64_000
 FALLBACK_BETA = "server-side-fallback-2026-07-01"

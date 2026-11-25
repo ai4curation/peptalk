@@ -6,9 +6,9 @@ one store: a record already present (same uid) is skipped, and two people asking
 samples, both kept. ``annotated_fasta`` writes each distinct annotated sequence once, named by its MD5, ready for
 ``diamond makedb`` or ``makeblastdb``; the annotations join back to search hits on ``seq_md5``.
 
->>> from llm_protein_annotator.annotator import Annotator
->>> from llm_protein_annotator.providers import get_provider
->>> from llm_protein_annotator.fasta import SequenceRecord
+>>> from peptalk.annotator import Annotator
+>>> from peptalk.providers import get_provider
+>>> from peptalk.fasta import SequenceRecord
 >>> recs = Annotator(get_provider("stub"), model="stub").annotate([SequenceRecord(id="p1", sequence="MKTAYIAKQR")],
 ...                                                              ["features", "active-site"])
 >>> print(annotated_fasta(recs), end="")
@@ -21,9 +21,9 @@ from __future__ import annotations
 from collections.abc import Iterable
 from pathlib import Path
 
-from llm_protein_annotator.fasta import SequenceRecord, format_fasta
-from llm_protein_annotator.schema import Annotation
-from llm_protein_annotator.store import Store
+from peptalk.fasta import SequenceRecord, format_fasta
+from peptalk.schema import Annotation
+from peptalk.store import Store
 
 
 def export_records(store: Store, real_only: bool = False) -> list[Annotation]:
@@ -93,7 +93,7 @@ def to_parquet(records: Iterable[Annotation], path: Path | str) -> int:
     """Write records to Parquet, one row per call (deduplicated by ``uid``); returns the row count.
 
     Scalar fields become columns; tokens are flattened (``input_tokens``, ``output_tokens``, ``thinking_tokens``);
-    the answer, checks, options and reply text are kept as JSON strings. Needs ``llm-protein-annotator[parquet]``.
+    the answer, checks, options and reply text are kept as JSON strings. Needs ``peptalk[parquet]``.
     """
     import json
 

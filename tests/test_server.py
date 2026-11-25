@@ -4,9 +4,9 @@ import pytest
 from conftest import DATA
 from fastapi.testclient import TestClient
 
-from llm_protein_annotator.providers.stub import StubProvider
-from llm_protein_annotator.server import create_app
-from llm_protein_annotator.store import Store
+from peptalk.providers.stub import StubProvider
+from peptalk.server import create_app
+from peptalk.store import Store
 
 FASTA = (DATA / "example.fasta").read_text()
 

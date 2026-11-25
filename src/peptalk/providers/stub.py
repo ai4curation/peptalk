@@ -3,7 +3,7 @@
 It answers every prompt with an empty answer object of the right shape, so a pipeline can be checked end to end
 without an API key or cost. Its "batches" finish at once.
 
->>> from llm_protein_annotator.tasks import TASKS
+>>> from peptalk.tasks import TASKS
 >>> p = StubProvider()
 >>> p.complete(TASKS["features"].prompt_for("MKT"), "stub", "low").text[:16]
 '{"pfam_domains":'
@@ -17,10 +17,10 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from llm_protein_annotator import __version__
-from llm_protein_annotator.providers.base import BatchStatus
-from llm_protein_annotator.schema import Completion, Usage
-from llm_protein_annotator.tasks import TASKS
+from peptalk import __version__
+from peptalk.providers.base import BatchStatus
+from peptalk.schema import Completion, Usage
+from peptalk.tasks import TASKS
 
 
 class StubProvider:
@@ -31,7 +31,7 @@ class StubProvider:
 
     @property
     def client_version(self) -> str:
-        return f"lpa-stub {__version__}"
+        return f"peptalk-stub {__version__}"
 
     def request_options(self, model: str, effort: str) -> dict[str, Any]:
         return {"effort": effort}

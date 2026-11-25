@@ -6,12 +6,12 @@ The prompts and reply-reading rules of the fable-sequence-to-function study
 
 from importlib.metadata import version
 
-__version__ = version("llm-protein-annotator")
+__version__ = version("peptalk")
 
-from llm_protein_annotator.annotator import Annotator
-from llm_protein_annotator.fasta import SequenceRecord, parse_fasta, read_fasta
-from llm_protein_annotator.schema import Annotation
-from llm_protein_annotator.store import Store
-from llm_protein_annotator.tasks import TASKS
+from peptalk.annotator import Annotator
+from peptalk.fasta import SequenceRecord, parse_fasta, read_fasta
+from peptalk.schema import Annotation
+from peptalk.store import Store
+from peptalk.tasks import TASKS
 
 __all__ = ["TASKS", "Annotation", "Annotator", "SequenceRecord", "Store", "__version__", "parse_fasta", "read_fasta"]

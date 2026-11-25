@@ -3,8 +3,8 @@ from types import SimpleNamespace as NS
 import pytest
 from google.genai import errors, types
 
-from llm_protein_annotator.providers import ProviderError
-from llm_protein_annotator.providers.gemini import GeminiProvider
+from peptalk.providers import ProviderError
+from peptalk.providers.gemini import GeminiProvider
 
 
 def response(text='{"a": 1}', block=None):

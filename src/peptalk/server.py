@@ -1,4 +1,4 @@
-"""A REST-like API over the annotator (``pip install 'llm-protein-annotator[server]'``; run with ``lpa serve``).
+"""A REST-like API over the annotator (``pip install 'peptalk[server]'``; run with ``peptalk serve``).
 
 Endpoints (OpenAPI docs at ``/docs`` and ``/openapi.json``):
 
@@ -26,16 +26,16 @@ from typing import Any, Literal
 from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel, Field, model_validator
 
-from llm_protein_annotator import __version__, batch
-from llm_protein_annotator.annotator import Annotator, build_questions, new_annotation
-from llm_protein_annotator.fasta import SequenceRecord, clean_sequence, parse_fasta
-from llm_protein_annotator.pricing import PRICES, Price
-from llm_protein_annotator.providers import PROVIDERS, installed, provider_for
-from llm_protein_annotator.providers.base import Provider
-from llm_protein_annotator.report import totals
-from llm_protein_annotator.schema import Annotation
-from llm_protein_annotator.store import Store
-from llm_protein_annotator.tasks import TASKS
+from peptalk import __version__, batch
+from peptalk.annotator import Annotator, build_questions, new_annotation
+from peptalk.fasta import SequenceRecord, clean_sequence, parse_fasta
+from peptalk.pricing import PRICES, Price
+from peptalk.providers import PROVIDERS, installed, provider_for
+from peptalk.providers.base import Provider
+from peptalk.report import totals
+from peptalk.schema import Annotation
+from peptalk.store import Store
+from peptalk.tasks import TASKS
 
 DEFAULT_MODEL = "claude-fable-5-2"
 DEFAULT_EFFORT = "high"
@@ -122,7 +122,7 @@ def create_app(
 ) -> FastAPI:
     """Build the API around a store. ``provider_factory(model, provider)`` makes providers (tests pass fakes)."""
     app = FastAPI(
-        title="llm-protein-annotator",
+        title="peptalk",
         version=__version__,
         description="Protein annotation from sequence alone by direct, single-shot LLM API calls.",
     )

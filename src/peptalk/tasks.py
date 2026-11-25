@@ -24,8 +24,8 @@ from dataclasses import dataclass
 
 from pydantic import BaseModel
 
-from llm_protein_annotator.fasta import wrap
-from llm_protein_annotator.schema import (
+from peptalk.fasta import wrap
+from peptalk.schema import (
     ActiveSiteAnswer,
     CombinedAnswer,
     FeaturesAnswer,

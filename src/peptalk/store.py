@@ -12,9 +12,9 @@ options. Answers are sampled, so a cache hit returns a stored sample, not a fres
 
 Rows are keyed by the call's ``uid``, so importing another person's export adds only calls not already present.
 
->>> from llm_protein_annotator.annotator import Annotator
->>> from llm_protein_annotator.providers import get_provider
->>> from llm_protein_annotator.fasta import SequenceRecord
+>>> from peptalk.annotator import Annotator
+>>> from peptalk.providers import get_provider
+>>> from peptalk.fasta import SequenceRecord
 >>> store = Store(":memory:")
 >>> ann = Annotator(get_provider("stub"), model="stub", store=store)
 >>> first = ann.annotate([SequenceRecord(id="p1", sequence="MKTAYIAKQR")], ["features"])
@@ -32,7 +32,7 @@ import threading
 from collections.abc import Iterable, Iterator, Sequence
 from pathlib import Path
 
-from llm_protein_annotator.schema import Annotation
+from peptalk.schema import Annotation
 
 KEY_FIELDS = ("seq_md5", "task", "prompt_version", "condition", "provider", "model", "effort", "options")
 DEFAULT_KEY = ("seq_md5", "task", "prompt_version", "provider", "model", "effort")
@@ -80,11 +80,11 @@ CREATE TABLE IF NOT EXISTS jobs (
 
 
 def default_db_path() -> Path:
-    """``$LPA_DB``, else ``$XDG_DATA_HOME/llm-protein-annotator/lpa.db``, else ``~/.local/share/...``."""
-    if env := os.environ.get("LPA_DB"):
+    """``$PEPTALK_DB``, else ``$XDG_DATA_HOME/peptalk/peptalk.db``, else ``~/.local/share/...``."""
+    if env := os.environ.get("PEPTALK_DB"):
         return Path(env)
     base = os.environ.get("XDG_DATA_HOME") or Path.home() / ".local" / "share"
-    return Path(base) / "llm-protein-annotator" / "lpa.db"
+    return Path(base) / "peptalk" / "peptalk.db"
 
 
 def usable(a: Annotation) -> bool:

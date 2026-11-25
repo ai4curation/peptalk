@@ -1,4 +1,4 @@
-"""The ``lpa`` command line (also installed as ``llm-protein-annotator``)."""
+"""The ``peptalk`` command line."""
 
 from __future__ import annotations
 
@@ -9,27 +9,27 @@ from typing import Annotated
 
 import typer
 
-from llm_protein_annotator import __version__
-from llm_protein_annotator.annotator import Annotator, build_questions, new_annotation
-from llm_protein_annotator.exchange import annotated_fasta, export_records, import_jsonl, to_parquet
-from llm_protein_annotator.fasta import SequenceRecord, format_fasta, parse_fasta, shuffle_sequence
-from llm_protein_annotator.pricing import load_prices
-from llm_protein_annotator.providers import PROVIDERS, provider_for
-from llm_protein_annotator.providers.base import Provider
-from llm_protein_annotator.report import dumps_json, read_jsonl, totals_line, write_jsonl, write_tsv
-from llm_protein_annotator.schema import Annotation
-from llm_protein_annotator.store import DEFAULT_KEY, KEY_FIELDS, Store, default_db_path
-from llm_protein_annotator.tasks import TASKS
+from peptalk import __version__
+from peptalk.annotator import Annotator, build_questions, new_annotation
+from peptalk.exchange import annotated_fasta, export_records, import_jsonl, to_parquet
+from peptalk.fasta import SequenceRecord, format_fasta, parse_fasta, shuffle_sequence
+from peptalk.pricing import load_prices
+from peptalk.providers import PROVIDERS, provider_for
+from peptalk.providers.base import Provider
+from peptalk.report import dumps_json, read_jsonl, totals_line, write_jsonl, write_tsv
+from peptalk.schema import Annotation
+from peptalk.store import DEFAULT_KEY, KEY_FIELDS, Store, default_db_path
+from peptalk.tasks import TASKS
 
 EPILOG = """Examples:
 
-  lpa annotate proteins.fasta -t features -t active-site --shuffle-control -o results.jsonl
+  peptalk annotate proteins.fasta -t features -t active-site --shuffle-control -o results.jsonl
 
-  lpa annotate - -m claude-opus-5-5 -f tsv < one.fasta
+  peptalk annotate - -m claude-opus-5-5 -f tsv < one.fasta
 
-  lpa batch submit proteins.fasta --manifest m.json   (then: lpa batch status m.json; lpa batch collect m.json)
+  peptalk batch submit proteins.fasta --manifest m.json   (then: peptalk batch status m.json; peptalk batch collect m.json)
 
-  lpa log      lpa export --parquet calls.parquet      lpa serve
+  peptalk log      peptalk export --parquet calls.parquet      peptalk serve
 """
 
 app = typer.Typer(
@@ -85,7 +85,7 @@ DbOpt = Annotated[
     Path | None,
     typer.Option(
         "--db",
-        help="SQLite log and cache [default: ~/.local/share/llm-protein-annotator/lpa.db].",
+        help="SQLite log and cache [default: ~/.local/share/peptalk/peptalk.db].",
         rich_help_panel="Store, cache and cost",
     ),
 ]
@@ -284,7 +284,7 @@ def export_cmd(
     ] = None,
     real_only: Annotated[bool, typer.Option(help="Leave out the shuffled controls.")] = False,
 ) -> None:
-    """Write every logged call, one record per call: JSONL (to merge with 'lpa import') or Parquet (to query).
+    """Write every logged call, one record per call: JSONL (to merge with 'peptalk import') or Parquet (to query).
 
     Records carry the sequence, its MD5 (seq_md5) and the call's uid, so exports from different people
     merge without duplicates.
@@ -294,9 +294,7 @@ def export_cmd(
         try:
             n = to_parquet(records, parquet)
         except ImportError as e:
-            raise typer.BadParameter(
-                "Parquet export needs pyarrow: pip install 'llm-protein-annotator[parquet]'"
-            ) from e
+            raise typer.BadParameter("Parquet export needs pyarrow: pip install 'peptalk[parquet]'") from e
         typer.echo(f"{n} records written to {parquet}", err=True)
         return
     _write(records, Format.jsonl, output)
@@ -340,11 +338,9 @@ def serve(
     try:
         import uvicorn
 
-        from llm_protein_annotator.server import create_app
+        from peptalk.server import create_app
     except ImportError as e:
-        raise typer.BadParameter(
-            "the API needs FastAPI and uvicorn: pip install 'llm-protein-annotator[server]'"
-        ) from e
+        raise typer.BadParameter("the API needs FastAPI and uvicorn: pip install 'peptalk[server]'") from e
     uvicorn.run(create_app(_store(db), max_sync_questions=max_sync), host=host, port=port)
 
 
@@ -390,7 +386,7 @@ def batch_submit(
     max_tokens: MaxTokensOpt = 64_000,
 ) -> None:
     """Submit every question as one batch to the model's provider."""
-    from llm_protein_annotator import batch
+    from peptalk import batch
 
     p = _provider(provider, model, max_tokens=max_tokens)
     questions = build_questions(_read_records(fasta), _check_tasks(task), shuffle_control)
@@ -410,7 +406,7 @@ def batch_submit(
 @batch_app.command("status")
 def batch_status(manifest: Annotated[Path, typer.Argument(help="Manifest written by 'batch submit'.")]) -> None:
     """Show a batch's state and counts."""
-    from llm_protein_annotator.batch import BatchManifest
+    from peptalk.batch import BatchManifest
 
     m = BatchManifest.load(manifest)
     s = _provider(m.provider, m.model).batch_status(m.batch_id)
@@ -427,7 +423,7 @@ def batch_collect(
     prices: PricesOpt = None,
 ) -> None:
     """Read a finished batch's results, log them in the store, and write annotation records."""
-    from llm_protein_annotator.batch import BatchManifest, collect
+    from peptalk.batch import BatchManifest, collect
 
     m = BatchManifest.load(manifest)
     p = _provider(m.provider, m.model)
