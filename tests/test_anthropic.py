@@ -129,8 +129,16 @@ def test_batch_round_trip():
     c = client()
     c.messages.batches = batches
     p = AnthropicProvider(client=c)
-    assert p.submit_batch([("a", "PA"), ("b", "PB")], "claude-opus-5-5", "high") == "msgbatch_1"
+    assert p.submit_batch([("a", "PA", None), ("b", "PB", None)], "claude-opus-5-5", "high") == "msgbatch_1"
     assert batches.created[0]["params"]["messages"][0]["content"] == "PA"
     assert p.batch_status("msgbatch_1").done
     out = p.batch_results("msgbatch_1", ["a", "b"])
     assert out["a"].text == '{"x": 1}' and out["b"] == "batch result errored"
+
+
+def test_structured_request_shape():
+    c = client(message('{"a": 1}'))
+    AnthropicProvider(client=c).complete("P", "claude-opus-5-5", "high", {"type": "object", "properties": {}})
+    (kw,) = c.messages.calls
+    assert kw["output_config"]["format"]["type"] == "json_schema"
+    assert kw["output_config"]["format"]["schema"]["additionalProperties"] is False

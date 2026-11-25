@@ -22,19 +22,26 @@ DEFAULT_MAX_TOKENS = 64_000
 FALLBACK_BETA = "server-side-fallback-2026-07-01"
 
 
-def request_params(prompt: str, model: str, effort: str, max_tokens: int = DEFAULT_MAX_TOKENS) -> dict[str, Any]:
-    """The Messages API parameters for one question.
+def request_params(
+    prompt: str, model: str, effort: str, max_tokens: int = DEFAULT_MAX_TOKENS, schema: dict[str, Any] | None = None
+) -> dict[str, Any]:
+    """The Messages API parameters for one question; with a schema, structured output constrains the reply.
 
     >>> p = request_params("hi", "claude-opus-5-5", "high")
     >>> p["thinking"], p["output_config"], p["messages"]
     ({'type': 'adaptive'}, {'effort': 'high'}, [{'role': 'user', 'content': 'hi'}])
+    >>> request_params("hi", "m", "low", schema={"type": "object", "properties": {}})["output_config"]["format"]["type"]
+    'json_schema'
     """
+    output_config: dict[str, Any] = {"effort": effort}
+    if schema is not None:
+        output_config["format"] = {"type": "json_schema", "schema": anthropic.transform_schema(schema)}
     return {
         "model": model,
         "max_tokens": max_tokens,
         "messages": [{"role": "user", "content": prompt}],
         "thinking": {"type": "adaptive"},
-        "output_config": {"effort": effort},
+        "output_config": output_config,
     }
 
 
@@ -81,15 +88,15 @@ class AnthropicProvider:
     def client_version(self) -> str:
         return f"anthropic-python {anthropic.__version__}"
 
-    def request_options(self, model: str, effort: str) -> dict[str, Any]:
-        params = request_params("", model, effort, self.max_tokens)
+    def request_options(self, model: str, effort: str, schema: dict[str, Any] | None = None) -> dict[str, Any]:
+        params = request_params("", model, effort, self.max_tokens, schema)
         del params["messages"], params["model"]
         if self.fallback:
             params["fallbacks"] = "default"
         return params
 
-    def complete(self, prompt: str, model: str, effort: str) -> Completion:
-        params = request_params(prompt, model, effort, self.max_tokens)
+    def complete(self, prompt: str, model: str, effort: str, schema: dict[str, Any] | None = None) -> Completion:
+        params = request_params(prompt, model, effort, self.max_tokens, schema)
         try:
             if self.fallback:
                 with self.client.beta.messages.stream(**params, betas=[FALLBACK_BETA], fallbacks="default") as s:
@@ -101,17 +108,19 @@ class AnthropicProvider:
             raise ProviderError(f"{type(e).__name__}: {e}") from e
         return completion_from_message(message)
 
-    def count_tokens(self, prompt: str, model: str) -> int:
+    def count_tokens(self, prompt: str, model: str, schema: dict[str, Any] | None = None) -> int:
+        """Input tokens of the request: the prompt, plus the provider's own instructions for a schema if given."""
+        extra = {"output_config": request_params("", model, "low", schema=schema)["output_config"]} if schema else {}
         try:
-            r = self.client.messages.count_tokens(model=model, messages=[{"role": "user", "content": prompt}])
+            r = self.client.messages.count_tokens(model=model, messages=[{"role": "user", "content": prompt}], **extra)
         except anthropic.APIError as e:
             raise ProviderError(f"{type(e).__name__}: {e}") from e
         return int(r.input_tokens)
 
-    def submit_batch(self, items: list[tuple[str, str]], model: str, effort: str) -> str:
+    def submit_batch(self, items: list[tuple[str, str, dict[str, Any] | None]], model: str, effort: str) -> str:
         requests: list[Any] = [
-            {"custom_id": cid, "params": request_params(prompt, model, effort, self.max_tokens)}
-            for cid, prompt in items
+            {"custom_id": cid, "params": request_params(prompt, model, effort, self.max_tokens, schema)}
+            for cid, prompt, schema in items
         ]
         return str(self.client.messages.batches.create(requests=requests).id)
 

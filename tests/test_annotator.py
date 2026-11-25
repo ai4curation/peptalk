@@ -3,6 +3,7 @@ import json
 from peptalk.annotator import Annotator
 from peptalk.providers import ProviderError
 from peptalk.store import Store
+from peptalk.templates import TEMPLATES
 
 
 def test_annotate_with_shuffled_control(records, features_reply, scripted):
@@ -22,7 +23,7 @@ def test_annotate_with_shuffled_control(records, features_reply, scripted):
     assert real_ann.confidence == "flagged"
     assert real_ann.cost_usd == 1000 * 4 / 1e6 + 500 * 20 / 1e6
     assert real_ann.usage.thinking_tokens == 300
-    assert real_ann.options == {"effort": "high"} and real_ann.prompt_version == "b03b98845ad2"
+    assert real_ann.options == {"effort": "high"} and real_ann.prompt_version == TEMPLATES["features"].version
 
 
 def test_hidden_input_is_flagged(records, features_reply, scripted):

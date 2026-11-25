@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import json
 import sys
+from collections.abc import Callable
 from enum import Enum
 from pathlib import Path
 from typing import Annotated
@@ -10,16 +12,17 @@ from typing import Annotated
 import typer
 
 from peptalk import __version__
-from peptalk.annotator import Annotator, build_questions, new_annotation
-from peptalk.exchange import annotated_fasta, export_records, import_jsonl, to_parquet
+from peptalk.annotator import Annotator, build_questions, new_annotation, read_claims
+from peptalk.exchange import annotated_fasta, export_records, import_jsonl, to_gff3, to_parquet
 from peptalk.fasta import SequenceRecord, format_fasta, parse_fasta, shuffle_sequence
+from peptalk.headers import PROFILES
 from peptalk.pricing import load_prices
 from peptalk.providers import PROVIDERS, provider_for
 from peptalk.providers.base import Provider
 from peptalk.report import dumps_json, read_jsonl, totals_line, write_jsonl, write_tsv
 from peptalk.schema import Annotation
 from peptalk.store import DEFAULT_KEY, KEY_FIELDS, Store, default_db_path
-from peptalk.tasks import TASKS
+from peptalk.templates import CONTEXTS, DEFAULT_CONTEXT, PAYLOADS, TEMPLATES
 
 EPILOG = """Examples:
 
@@ -58,7 +61,7 @@ TaskOpt = Annotated[
     typer.Option(
         "--task",
         "-t",
-        help=f"Task to run; repeatable. One of: {', '.join(TASKS)} [default: features].",
+        help=f"Task to run; repeatable. One of: {', '.join(TEMPLATES)} [default: features].",
         rich_help_panel="Question",
     ),
 ]
@@ -72,6 +75,52 @@ EffortOpt = Annotated[
 ProviderOpt = Annotated[
     str | None,
     typer.Option(help=f"One of {', '.join(PROVIDERS)} [default: from the model name].", rich_help_panel="Model"),
+]
+ContextOpt = Annotated[
+    str,
+    typer.Option(
+        "--context",
+        "-c",
+        help="How much of each FASTA header the model sees: "
+        + "; ".join(f"{k}: {v}" for k, v in CONTEXTS.items())
+        + ". Use blind for validation studies.",
+        rich_help_panel="Question",
+    ),
+]
+ProfileOpt = Annotated[
+    str,
+    typer.Option(
+        "--header-profile",
+        help=f"How to parse FASTA headers: auto, {', '.join(PROFILES)}.",
+        rich_help_panel="Question",
+    ),
+]
+ParamOpt = Annotated[
+    list[str] | None,
+    typer.Option(
+        "--param",
+        "-p",
+        help="KEY=VALUE for an ask template's placeholders (repeatable), e.g. -p term=GO:0004672.",
+        rich_help_panel="Question",
+    ),
+]
+PayloadOpt = Annotated[
+    list[str] | None,
+    typer.Option(
+        "--with",
+        "-w",
+        help=f"Extra answer keys (repeatable or comma-separated): {', '.join(PAYLOADS)}. They cost tokens and can "
+        "change the answer; fix the choice for an evaluation run.",
+        rich_help_panel="Question",
+    ),
+]
+StructuredOpt = Annotated[
+    bool,
+    typer.Option(
+        "--structured/--no-structured",
+        help="Ask the provider to constrain replies to the task's JSON Schema (opt-in: changes the protocol).",
+        rich_help_panel="Model",
+    ),
 ]
 ShuffleOpt = Annotated[
     bool,
@@ -132,16 +181,43 @@ MaxTokensOpt = Annotated[
 ]
 
 
-def _read_records(fasta: Path) -> list[SequenceRecord]:
+def _read_records(fasta: Path, profile: str = "auto") -> list[SequenceRecord]:
     text = sys.stdin.read() if str(fasta) == "-" else fasta.read_text()
-    return parse_fasta(text)
+    try:
+        return parse_fasta(text, profile)
+    except ValueError as e:
+        raise typer.BadParameter(str(e)) from e
+
+
+def _params(items: list[str] | None) -> dict[str, str]:
+    out = {}
+    for item in items or []:
+        key, sep, value = item.partition("=")
+        if not sep or not key:
+            raise typer.BadParameter(f"--param takes KEY=VALUE, not {item!r}")
+        out[key.strip()] = value.strip()
+    return out
+
+
+def _payload(items: list[str] | None) -> list[str]:
+    names = [n.strip() for item in items or [] for n in item.split(",") if n.strip()]
+    bad = [n for n in names if n not in PAYLOADS]
+    if bad:
+        raise typer.BadParameter(f"unknown --with {', '.join(bad)}; choose from {', '.join(PAYLOADS)}")
+    return names
+
+
+def _check_context(context: str) -> str:
+    if context not in CONTEXTS:
+        raise typer.BadParameter(f"unknown context {context!r}; choose from {', '.join(CONTEXTS)}")
+    return context
 
 
 def _check_tasks(tasks: list[str] | None) -> list[str]:
     tasks = tasks or ["features"]
-    bad = [t for t in tasks if t not in TASKS]
+    bad = [t for t in tasks if t not in TEMPLATES]
     if bad:
-        raise typer.BadParameter(f"unknown task(s) {', '.join(bad)}; choose from {', '.join(TASKS)}")
+        raise typer.BadParameter(f"unknown task(s) {', '.join(bad)}; choose from {', '.join(TEMPLATES)}")
     return tasks
 
 
@@ -193,7 +269,12 @@ def annotate(
     model: ModelOpt = DEFAULT_MODEL,
     effort: EffortOpt = DEFAULT_EFFORT,
     provider: ProviderOpt = None,
+    context: ContextOpt = DEFAULT_CONTEXT,
+    header_profile: ProfileOpt = "auto",
+    param: ParamOpt = None,
+    payload: PayloadOpt = None,
     shuffle_control: ShuffleOpt = False,
+    structured: StructuredOpt = False,
     output: OutOpt = None,
     fmt: FormatOpt = Format.jsonl,
     db: DbOpt = None,
@@ -218,8 +299,11 @@ def annotate(
         bool, typer.Option("--quiet", "-q", help="No progress or totals on standard error.", rich_help_panel="Output")
     ] = False,
 ) -> None:
-    """Annotate every sequence in a FASTA file. Each sequence is sent alone, headed '>sequence'."""
-    records = _read_records(fasta)
+    """Annotate every sequence in a FASTA file, one question per sequence and task.
+
+    Each sequence is sent alone. How much of its FASTA header goes with it is set by --context.
+    """
+    records = _read_records(fasta, header_profile)
     tasks = _check_tasks(task)
     annotator = Annotator(
         _provider(provider, model, fallback, max_tokens),
@@ -230,14 +314,79 @@ def annotate(
         concurrency=concurrency,
         verify_input=verify_input,
         reuse=reuse,
+        context=_check_context(context),
+        structured=structured,
+        payload=_payload(payload),
     )
+    try:
+        annotations = annotator.annotate(
+            records, tasks, shuffle_control=shuffle_control, progress=_progress(quiet), params=_params(param)
+        )
+    except ValueError as e:  # a template parameter missing, or a payload the template cannot take
+        raise typer.BadParameter(str(e)) from e
+    _write(annotations, fmt, output)
+    if not quiet:
+        typer.echo(totals_line(annotations), err=True)
 
-    def progress(a: Annotation) -> None:
-        if not quiet:
-            how = "reused" if a.cached else (a.error or a.confidence)
-            typer.echo(f"{a.id}\t{a.task}\t{a.condition}\t{how}", err=True)
 
-    annotations = annotator.annotate(records, tasks, shuffle_control=shuffle_control, progress=progress)
+def _progress(quiet: bool) -> Callable[[Annotation], None] | None:
+    def show(a: Annotation) -> None:
+        how = "reused" if a.cached else (a.error or a.confidence)
+        typer.echo(f"{a.id}\t{a.task}\t{a.condition}\t{how}", err=True)
+
+    return None if quiet else show
+
+
+@app.command()
+def ask(
+    fasta: FastaArg,
+    claims: Annotated[
+        Path,
+        typer.Option(help="TSV of claims: columns id (FASTA id), task (an ask-* template) and its parameters."),
+    ],
+    model: ModelOpt = DEFAULT_MODEL,
+    effort: EffortOpt = DEFAULT_EFFORT,
+    provider: ProviderOpt = None,
+    context: ContextOpt = DEFAULT_CONTEXT,
+    header_profile: ProfileOpt = "auto",
+    payload: PayloadOpt = None,
+    shuffle_control: ShuffleOpt = False,
+    output: OutOpt = None,
+    fmt: FormatOpt = Format.jsonl,
+    db: DbOpt = None,
+    reuse: ReuseOpt = True,
+    verify_input: VerifyOpt = True,
+    prices: PricesOpt = None,
+    quiet: Annotated[
+        bool, typer.Option("--quiet", "-q", help="No progress or totals on standard error.", rich_help_panel="Output")
+    ] = False,
+) -> None:
+    """Check claims one at a time: each row of --claims is one yes/no/uncertain question about one sequence.
+
+    Example claims.tsv (tab-separated; empty cells are fine):
+
+        id  task  term  label  position  residue
+
+        Q2PAY3_wt  ask-catalytic-residue      436  D
+
+        Q2PAY3_wt  ask-function  GO:0004672  protein kinase activity
+    """
+    records = _read_records(fasta, header_profile)
+    annotator = Annotator(
+        _provider(provider, model),
+        model=model,
+        effort=effort,
+        store=_store(db),
+        prices=load_prices(prices) if prices else None,
+        verify_input=verify_input,
+        reuse=reuse,
+        context=_check_context(context),
+        payload=_payload(payload),
+    )
+    try:
+        annotations = annotator.check_claims(records, read_claims(claims), shuffle_control, _progress(quiet))
+    except (ValueError, KeyError) as e:
+        raise typer.BadParameter(str(e)) from e
     _write(annotations, fmt, output)
     if not quiet:
         typer.echo(totals_line(annotations), err=True)
@@ -282,14 +431,22 @@ def export_cmd(
     parquet: Annotated[
         Path | None, typer.Option(help="Write Parquet here instead of JSONL (needs the 'parquet' extra).")
     ] = None,
+    gff3: Annotated[
+        Path | None, typer.Option(help="Write GFF3 of the located features (domains, TM helices, residues) here.")
+    ] = None,
+    gff_seqid: Annotated[str, typer.Option(help="GFF3 sequence ids: 'id' (FASTA id) or 'md5'.")] = "id",
     real_only: Annotated[bool, typer.Option(help="Leave out the shuffled controls.")] = False,
 ) -> None:
-    """Write every logged call, one record per call: JSONL (to merge with 'peptalk import') or Parquet (to query).
+    """Write every logged call: JSONL (to merge with 'peptalk import'), Parquet (to query) or GFF3 (features).
 
     Records carry the sequence, its MD5 (seq_md5) and the call's uid, so exports from different people
-    merge without duplicates.
+    merge without duplicates. GFF3 holds only located features; contacts and whole-protein calls stay in the records.
     """
     records = export_records(_store(db), real_only=real_only)
+    if gff3:
+        gff3.write_text(to_gff3(records, seqid=gff_seqid))
+        typer.echo(f"GFF3 of {len(records)} records written to {gff3}", err=True)
+        return
     if parquet:
         try:
             n = to_parquet(records, parquet)
@@ -346,14 +503,25 @@ def serve(
 
 @app.command()
 def tasks(
-    show: Annotated[str | None, typer.Option(help="Print the full prompt of this task.")] = None,
+    show: Annotated[str | None, typer.Option(help="Print the prompt template of this task.")] = None,
+    schema: Annotated[str | None, typer.Option(help="Print the JSON Schema of this task's answer.")] = None,
 ) -> None:
-    """List the tasks (name, prompt version, source, summary), or print one task's prompt."""
+    """List the tasks (name, prompt version, source, summary), or print one task's prompt or answer schema."""
     if show:
-        typer.echo(TASKS[_check_tasks([show])[0]].prompt_for("<sequence>"))
+        typer.echo(TEMPLATES[_check_tasks([show])[0]].prompt)
         return
-    for t in TASKS.values():
+    if schema:
+        typer.echo(json.dumps(TEMPLATES[_check_tasks([schema])[0]].json_schema(), indent=2))
+        return
+    for t in TEMPLATES.values():
         typer.echo(f"{t.name}\t{t.version}\t{t.source}\t{t.summary}")
+
+
+@app.command()
+def headers(fasta: FastaArg, header_profile: ProfileOpt = "auto") -> None:
+    """Show the fields parsed from each FASTA header (one JSON object per sequence)."""
+    for r in _read_records(fasta, header_profile):
+        typer.echo(json.dumps(r.header))
 
 
 @app.command()
@@ -378,7 +546,12 @@ def batch_submit(
     model: ModelOpt = DEFAULT_MODEL,
     effort: EffortOpt = DEFAULT_EFFORT,
     provider: ProviderOpt = None,
+    context: ContextOpt = DEFAULT_CONTEXT,
+    header_profile: ProfileOpt = "auto",
+    param: ParamOpt = None,
+    payload: PayloadOpt = None,
     shuffle_control: ShuffleOpt = False,
+    structured: StructuredOpt = False,
     db: DbOpt = None,
     reuse: Annotated[bool, typer.Option("--reuse/--no-reuse", help="Leave out questions with a stored answer.")] = True,
     cache_key: KeyOpt = DEFAULT_KEY_TEXT,
@@ -389,14 +562,21 @@ def batch_submit(
     from peptalk import batch
 
     p = _provider(provider, model, max_tokens=max_tokens)
-    questions = build_questions(_read_records(fasta), _check_tasks(task), shuffle_control)
+    questions = build_questions(
+        _read_records(fasta, header_profile),
+        _check_tasks(task),
+        shuffle_control,
+        _check_context(context),
+        _params(param),
+        _payload(payload),
+    )
     if reuse:
         store = _store(db, cache_key)
-        questions = [q for q in questions if store.lookup(new_annotation(q, p, model, effort)) is None]
+        questions = [q for q in questions if store.lookup(new_annotation(q, p, model, effort, structured)) is None]
     if not questions:
         typer.echo("Every question already has a stored answer; nothing to submit.", err=True)
         raise typer.Exit()
-    m = batch.submit(p, questions, model, effort, verify_input=verify_input)
+    m = batch.submit(p, questions, model, effort, verify_input=verify_input, structured=structured)
     m.save(manifest)
     typer.echo(
         f"Submitted {m.provider} batch {m.batch_id} with {len(m.entries)} questions; manifest in {manifest}", err=True

@@ -18,8 +18,20 @@ from collections.abc import Iterable
 from pathlib import Path
 
 from peptalk.schema import Annotation
+from peptalk.templates import TEMPLATES
 
-SUMMARY_COLUMNS = ["id", "task", "condition", "confidence", "protein_name", "call", "flags", "cost_usd", "reused"]
+SUMMARY_COLUMNS = [
+    "id",
+    "task",
+    "condition",
+    "context",
+    "confidence",
+    "protein_name",
+    "call",
+    "flags",
+    "cost_usd",
+    "reused",
+]
 
 
 def write_jsonl(annotations: Iterable[Annotation], fh: io.TextIOBase) -> None:
@@ -30,43 +42,11 @@ def read_jsonl(path: Path | str) -> list[Annotation]:
     return [Annotation.model_validate_json(line) for line in Path(path).read_text().splitlines() if line.strip()]
 
 
-def _ranges(items: list) -> str:
-    return ",".join(f"{r[0]}-{r[1]}" for r in items if isinstance(r, (list, tuple)) and len(r) == 2)
-
-
 def headline(a: Annotation) -> str:
-    """The main call of an answer, in one short string."""
-    x = a.answer or {}
-    if a.task == "features":
-        doms = [
-            f"{d.get('accession') or d.get('name')}:{d.get('start')}-{d.get('end')}"
-            for d in x.get("pfam_domains") or []
-        ]
-        parts = [";".join(doms)]
-        if x.get("transmembrane_helices"):
-            parts.append(f"TM {_ranges(x['transmembrane_helices'])}")
-        if x.get("signal_peptide"):
-            parts.append("SP")
-        return " ".join(p for p in parts if p)
-    if a.task == "active-site":
-        subs = [
-            f"{s.get('expected')}{s.get('position') or ''}{s.get('found')}"
-            for s in x.get("substituted_or_missing") or []
-        ]
-        return f"active={x.get('catalytically_active')}" + (f" lost {','.join(subs)}" if subs else "")
-    if a.task == "structure":
-        return f"{x.get('fold')}; {len(x.get('helices') or [])}H {len(x.get('strands') or [])}E"
-    if a.task == "combined":
-        combined = ";".join(
-            f"{d.get('accession') or d.get('name')}:{d.get('start')}-{d.get('end')}"
-            for d in x.get("pfam_domains") or []
-        )
-        return f"{combined} active={x.get('catalytically_active')}".strip()
-    if a.task == "function":
-        return ",".join(t.get("id") or t.get("label") or "" for t in x.get("molecular_function") or []) or (
-            x.get("summary") or ""
-        )
-    return ""
+    """The main call of an answer, in one short string (each template says how)."""
+    if a.answer is None or a.task not in TEMPLATES:
+        return ""
+    return TEMPLATES[a.task].headline(a.answer)
 
 
 def summary_rows(annotations: Iterable[Annotation]) -> list[dict[str, str]]:
@@ -82,6 +62,7 @@ def summary_rows(annotations: Iterable[Annotation]) -> list[dict[str, str]]:
                 "id": a.id,
                 "task": a.task,
                 "condition": a.condition,
+                "context": a.context,
                 "confidence": a.confidence,
                 "protein_name": str((a.answer or {}).get("protein_name") or ""),
                 "call": headline(a),

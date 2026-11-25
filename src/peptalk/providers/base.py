@@ -33,18 +33,20 @@ class Provider(Protocol):
     @property
     def client_version(self) -> str: ...
 
-    def request_options(self, model: str, effort: str) -> dict[str, Any]:
+    def request_options(self, model: str, effort: str, schema: dict[str, Any] | None = None) -> dict[str, Any]:
         """Every request field besides the prompt, as sent."""
         ...
 
-    def complete(self, prompt: str, model: str, effort: str) -> Completion: ...
-
-    def count_tokens(self, prompt: str, model: str) -> int:
-        """Input tokens of the prompt alone, from the provider's token-counting endpoint."""
+    def complete(self, prompt: str, model: str, effort: str, schema: dict[str, Any] | None = None) -> Completion:
+        """Ask one question. ``schema`` (opt-in) asks the provider to constrain the reply to a JSON Schema."""
         ...
 
-    def submit_batch(self, items: list[tuple[str, str]], model: str, effort: str) -> str:
-        """Submit (custom_id, prompt) pairs; returns the batch id."""
+    def count_tokens(self, prompt: str, model: str, schema: dict[str, Any] | None = None) -> int:
+        """Input tokens of the request (the prompt, and any schema), from the provider's token-counting endpoint."""
+        ...
+
+    def submit_batch(self, items: list[tuple[str, str, dict[str, Any] | None]], model: str, effort: str) -> str:
+        """Submit (custom_id, prompt, JSON Schema or None) items; returns the batch id."""
         ...
 
     def batch_status(self, batch_id: str) -> BatchStatus: ...

@@ -13,18 +13,30 @@ import re
 import zlib
 from pathlib import Path
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, model_validator
+
+from peptalk.headers import parse_header
 
 AMINO_ACIDS = set("ACDEFGHIKLMNPQRSTVWYBXZJUO")
 _ID_SAFE = re.compile(r"[^A-Za-z0-9_-]")
 
 
 class SequenceRecord(BaseModel):
-    """One protein sequence: identifier, free-text description and residues (upper case)."""
+    """One protein sequence: identifier, free-text description, residues (upper case), and parsed header fields.
+
+    ``header`` holds every field the header profile found (open-ended); without one it is the plain split.
+    """
 
     id: str
     description: str = ""
     sequence: str
+    header: dict[str, str] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def _plain_header(self) -> SequenceRecord:
+        if not self.header:
+            self.header = parse_header(f"{self.id} {self.description}".strip(), "plain")
+        return self
 
     @property
     def md5(self) -> str:
@@ -62,8 +74,14 @@ def clean_sequence(raw: str) -> str:
     return seq
 
 
-def parse_fasta(text: str) -> list[SequenceRecord]:
-    """Parse FASTA text. Lines before the first header are an error; empty records are skipped.
+def parse_fasta(text: str, profile: str = "auto") -> list[SequenceRecord]:
+    """Parse FASTA text; headers are parsed with a profile (see ``peptalk.headers``).
+
+    Lines before the first header are an error; empty records are skipped.
+
+    >>> r = parse_fasta(">sp|P0A7B8|HSLV_ECOLI Protease HslV OS=Escherichia coli OX=83333\\nTTIVS\\n")[0]
+    >>> r.id, r.header["accession"], r.header["organism"]
+    ('sp|P0A7B8|HSLV_ECOLI', 'P0A7B8', 'Escherichia coli')
 
     >>> parse_fasta("MKT")
     Traceback (most recent call last):
@@ -79,8 +97,10 @@ def parse_fasta(text: str) -> list[SequenceRecord]:
             return
         seq = clean_sequence("".join(chunks))
         if seq:
-            ident, _, desc = header.partition(" ")
-            records.append(SequenceRecord(id=ident, description=desc.strip(), sequence=seq))
+            fields = parse_header(header, profile)
+            records.append(
+                SequenceRecord(id=fields["id"], description=fields["description"], sequence=seq, header=fields)
+            )
 
     for line in text.splitlines():
         line = line.strip()
@@ -101,9 +121,9 @@ def parse_fasta(text: str) -> list[SequenceRecord]:
     return records
 
 
-def read_fasta(path: Path | str) -> list[SequenceRecord]:
+def read_fasta(path: Path | str, profile: str = "auto") -> list[SequenceRecord]:
     """Read a FASTA file (``-`` is not handled here; the CLI reads stdin itself)."""
-    return parse_fasta(Path(path).read_text())
+    return parse_fasta(Path(path).read_text(), profile)
 
 
 def wrap(seq: str, width: int = 60) -> str:

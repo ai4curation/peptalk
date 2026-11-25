@@ -26,13 +26,18 @@ DONE_STATES = {
 }
 
 
-def thinking_config(effort: str) -> dict[str, Any]:
-    """The generation config for an effort.
+def thinking_config(effort: str, schema: dict[str, Any] | None = None) -> dict[str, Any]:
+    """The generation config for an effort; with a schema, a JSON response constrained to it.
 
     >>> thinking_config("high")
     {'thinking_config': {'thinking_level': 'HIGH'}}
+    >>> sorted(thinking_config("low", {"type": "object"}))
+    ['response_json_schema', 'response_mime_type', 'thinking_config']
     """
-    return {"thinking_config": {"thinking_level": effort.upper()}}
+    config: dict[str, Any] = {"thinking_config": {"thinking_level": effort.upper()}}
+    if schema is not None:
+        config.update(response_mime_type="application/json", response_json_schema=schema)
+    return config
 
 
 def completion_from_response(resp: types.GenerateContentResponse, model: str) -> Completion:
@@ -67,32 +72,33 @@ class GeminiProvider:
     def client_version(self) -> str:
         return f"google-genai {version('google-genai')}"
 
-    def request_options(self, model: str, effort: str) -> dict[str, Any]:
-        return thinking_config(effort)
+    def request_options(self, model: str, effort: str, schema: dict[str, Any] | None = None) -> dict[str, Any]:
+        return thinking_config(effort, schema)
 
-    def complete(self, prompt: str, model: str, effort: str) -> Completion:
-        config = types.GenerateContentConfig.model_validate(thinking_config(effort))
+    def complete(self, prompt: str, model: str, effort: str, schema: dict[str, Any] | None = None) -> Completion:
+        config = types.GenerateContentConfig.model_validate(thinking_config(effort, schema))
         try:
             resp = self.client.models.generate_content(model=model, contents=prompt, config=config)
         except errors.APIError as e:
             raise ProviderError(f"{type(e).__name__}: {e}") from e
         return completion_from_response(resp, model)
 
-    def count_tokens(self, prompt: str, model: str) -> int:
+    def count_tokens(self, prompt: str, model: str, schema: dict[str, Any] | None = None) -> int:
+        """Input tokens of the prompt; a response schema adds none to Gemini's prompt count."""
         try:
             r = self.client.models.count_tokens(model=model, contents=prompt)
         except errors.APIError as e:
             raise ProviderError(f"{type(e).__name__}: {e}") from e
         return int(r.total_tokens or 0)
 
-    def submit_batch(self, items: list[tuple[str, str]], model: str, effort: str) -> str:
+    def submit_batch(self, items: list[tuple[str, str, dict[str, Any] | None]], model: str, effort: str) -> str:
         src: list[Any] = [
             {
                 "contents": [{"role": "user", "parts": [{"text": prompt}]}],
-                "config": thinking_config(effort),
+                "config": thinking_config(effort, schema),
                 "metadata": {"custom_id": cid},
             }
-            for cid, prompt in items
+            for cid, prompt, schema in items
         ]
         job = self.client.batches.create(model=model, src=src, config={"display_name": "peptalk"})
         return str(job.name)

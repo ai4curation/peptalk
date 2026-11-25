@@ -76,7 +76,7 @@ def test_batch_round_trip():
         ),
     )
     p = GeminiProvider(client=NS(models=FakeModels(), batches=NS(create=create, get=lambda name: job)))
-    assert p.submit_batch([("a", "PA"), ("b", "PB")], "gemini-4-neon", "high") == "batches/1"
+    assert p.submit_batch([("a", "PA", None), ("b", "PB", None)], "gemini-4-neon", "high") == "batches/1"
     assert created["src"][0]["metadata"] == {"custom_id": "a"}
     assert created["src"][0]["config"] == {"thinking_config": {"thinking_level": "HIGH"}}
     assert p.batch_status("batches/1").done

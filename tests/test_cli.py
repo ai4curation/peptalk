@@ -6,6 +6,8 @@ from typer.testing import CliRunner
 
 from peptalk import __version__
 from peptalk.cli import app
+from peptalk.store import Store
+from peptalk.templates import TEMPLATES
 
 runner = CliRunner()
 FASTA = str(DATA / "example.fasta")
@@ -32,8 +34,9 @@ def test_version():
 
 def test_tasks():
     out = run("tasks").stdout
-    assert "features\tb03b98845ad2\tfs2f FEAT" in out and "combined\t" in out
-    assert run("tasks", "--show", "active-site").stdout.strip().endswith(">sequence\n<sequence>")
+    assert f"features\t{TEMPLATES['features'].version}\tfs2f FEAT" in out and "combined\t" in out
+    assert run("tasks", "--show", "active-site").stdout.strip().endswith(">{{header}}\n{{sequence}}")
+    assert '"verdict"' in run("tasks", "--schema", "ask-function").stdout
 
 
 def test_annotate_log_export_import_fasta(tmp_path, db):
@@ -44,7 +47,7 @@ def test_annotate_log_export_import_fasta(tmp_path, db):
     assert all(r["seq_md5"] and r["sequence"] and r["uid"] for r in rows)
 
     summary = run("summarize", str(out))
-    assert summary.stdout.splitlines()[0].startswith("id\ttask\tcondition\tconfidence")
+    assert summary.stdout.splitlines()[0].startswith("id\ttask\tcondition\tcontext\tconfidence")
     assert "12 answers" in summary.stderr
 
     log = run("log", "--db", db, "--limit", "3").stdout.splitlines()
@@ -64,7 +67,7 @@ def test_annotate_log_export_import_fasta(tmp_path, db):
 
 def test_reuse_from_store(db):
     first = stub("annotate", "-", "-f", "tsv", "-q", db=db, input=">x\nMKTAYIAKQR\n")
-    assert first.stdout.splitlines()[1].startswith("x\tfeatures\treal\tchecks_passed")
+    assert first.stdout.splitlines()[1].startswith("x\tfeatures\treal\tblind\tchecks_passed")
     again = stub("annotate", "-", "-f", "tsv", db=db, input=">y\nMKTAYIAKQR\n")
     assert "1 reused" in again.stderr and again.stdout.splitlines()[1].startswith("y\t")
     fresh = stub("annotate", "-", "--no-reuse", db=db, input=">x\nMKTAYIAKQR\n")
@@ -121,3 +124,34 @@ def test_export_parquet(tmp_path, db):
     assert table.num_rows == 6 and {"uid", "seq_md5", "sequence", "answer", "thinking_tokens"} <= set(
         table.column_names
     )
+
+
+def test_ask_command(tmp_path, db):
+    claims = tmp_path / "claims.tsv"
+    claims.write_text(
+        "id\ttask\tterm\tlabel\tposition\tresidue\n"
+        "Q2PAY3_wt\task-catalytic-residue\t\t\t436\tD\n"
+        "Q2PAY3_wt\task-function\tGO:0004672\tprotein kinase activity\t\t\n"
+    )
+    out = stub("ask", FASTA, "--claims", str(claims), "-w", "confidence", "-f", "tsv", "-q", db=db).stdout
+    rows = [line.split("\t") for line in out.splitlines()[1:]]
+    assert [r[1] for r in rows] == ["ask-catalytic-residue", "ask-function"]
+    bad = tmp_path / "bad.tsv"
+    bad.write_text("id\ttask\nnope\task-function\n")
+    assert runner.invoke(app, ["ask", FASTA, "--claims", str(bad), "--provider", "stub", "--db", db]).exit_code != 0
+
+
+def test_context_payload_and_gff3_export(tmp_path, db):
+    stub("annotate", FASTA, "-t", "features", "-c", "full", "-w", "rationale,confidence", "-q", db=db)
+    rows = Store(db).query("SELECT DISTINCT context, payload FROM calls")[1]
+    assert rows == [("full", "confidence,rationale")]
+    gff = tmp_path / "out.gff3"
+    run("export", "--db", db, "--gff3", str(gff))
+    assert gff.read_text().startswith("##gff-version 3")
+    assert runner.invoke(app, ["annotate", FASTA, "--provider", "stub", "--db", db, "-c", "psychic"]).exit_code != 0
+    assert runner.invoke(app, ["annotate", FASTA, "--provider", "stub", "--db", db, "-w", "vibes"]).exit_code != 0
+
+
+def test_headers_command():
+    lines = run("headers", FASTA).stdout.splitlines()
+    assert json.loads(lines[0])["id"] == "A0ABQ0J1P6"

@@ -1,0 +1,4 @@
+Below is a protein sequence in one-letter amino acid codes. Annotate it {{basis}}. Reply with a single JSON object and nothing else, with these keys: "pfam_domains": list of {"accession": "PFxxxxx", "name": Pfam short name, "start": int, "end": int} (1-based residue positions; empty list if none recognised); "transmembrane_helices": list of [start, end]; "signal_peptide": true or false; "protein_name": string; "ec_number": string or null; "function": one sentence. Do not guess identifiers you are not confident of: leave a field empty or null instead.{{payload}}
+
+>{{header}}
+{{sequence}}

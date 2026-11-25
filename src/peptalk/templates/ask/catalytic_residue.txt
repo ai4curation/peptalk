@@ -1,0 +1,4 @@
+Below is a protein sequence in one-letter amino acid codes. {{Basis}}, decide whether residue {{residue}}{{position}} (the {{residue}} at position {{position}}, counting from 1) is a catalytic residue of an active site in this protein. Reply with a single JSON object and nothing else, with these keys: "verdict": "yes", "no" or "uncertain"; "residue_found": the one-letter code you read at position {{position}}; "reason": one or two sentences.{{payload}}
+
+>{{header}}
+{{sequence}}

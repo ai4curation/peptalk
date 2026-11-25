@@ -10,7 +10,9 @@ Each question is one direct API call to Anthropic, Gemini or OpenAI: a single us
 and the sequence, with no system prompt, no tools and no agent. Every call is checked against the sequence,
 priced, and logged with full provenance in a local SQLite store, which also serves as the cache. The prompts
 come from the [fable-sequence-to-function](https://github.com/ai4curation/fable-sequence-to-function) study
-(fs2f).
+(fs2f). The study's manuscript is
+[manuscript.pdf](https://github.com/ai4curation/fable-sequence-to-function/blob/main/manuscript.pdf), with a
+[summary of results](https://ai4curation.io/fable-sequence-to-function/); the preprint is forthcoming.
 
 The package, the import and the command are all `peptalk`.
 
@@ -66,8 +68,9 @@ Q2PAY3_asp_to_asn  active-site  real       checks_passed  Rhoptry protein of the
 the second.)
 
 `id` is the first word of the FASTA header, kept so you can match results to your input. `protein_name` is the
-model's own guess, made from the residues alone. Headers are never sent to the model, so its name owes nothing
-to yours. Here it named the ROP17 mutant a ROP2-family pseudokinase without seeing "ROP17" anywhere.
+model's own guess. The header's identifier and name reach the model only with `--context full`; by default it
+sees the organism at most (see [Header context](#header-context)), so its name owes nothing to yours. Here it
+named the ROP17 mutant a ROP2-family pseudokinase without seeing "ROP17" anywhere.
 
 **One sequence, from standard input, as a table:**
 
@@ -81,6 +84,22 @@ flagged when the shuffled copy also gets a domain, an "active" call or a recogni
 
 ```bash
 peptalk annotate examples/proteins.fasta -t features --shuffle-control -o results.jsonl
+```
+
+**Check one claim at a time.** Ask templates put a single claim to the model and get back yes, no or uncertain.
+A claims file has one row per claim:
+
+```bash
+printf 'id\ttask\tposition\tresidue\nQ2PAY3_wt\task-catalytic-residue\t436\tD\n' > claims.tsv
+peptalk ask examples/proteins.fasta --claims claims.tsv -w confidence
+```
+
+**Ask for more than the annotation.** `--with` (`-w`) adds a stated confidence, a short rationale, the residues
+cited as evidence (checked against the sequence), or the alternatives considered. These cost tokens and can
+change the answer, so keep one choice for a whole evaluation:
+
+```bash
+peptalk annotate examples/proteins.fasta -t active-site -w confidence,evidence
 ```
 
 **Many sequences: a batch.** A batch costs half as much and returns within 24 hours. Sequences that already
@@ -107,11 +126,13 @@ peptalk annotate examples/proteins.fasta --no-reuse    # ask again anyway
 peptalk export -o mine.jsonl                  # every logged call, one JSON record per line
 peptalk import theirs.jsonl                   # merge someone else's export; calls already present are skipped
 peptalk export --parquet calls.parquet        # for DuckDB, pandas, polars
+peptalk export --gff3 features.gff3       # located features (domains, TM helices, residues) as GFF3
 peptalk fasta -o annotated.fasta              # each annotated sequence once, named by its MD5, for DIAMOND or BLAST
 ```
 
 `peptalk --help` lists every command and `peptalk COMMAND --help` its options. `peptalk tasks` lists the tasks with their
-prompt versions. `peptalk tasks --show active-site` prints a task's full prompt. `--provider stub` calls no model,
+prompt versions. `peptalk tasks --show active-site` prints a task's prompt template and `--schema` its answer
+schema. `peptalk headers FILE` shows the fields parsed from each header. `--provider stub` calls no model,
 so a pipeline can be checked for free.
 
 ## REST API
@@ -127,7 +148,10 @@ peptalk serve                                  # http://127.0.0.1:8000, OpenAPI 
 | `POST /jobs` | Start a larger job: `"mode": "live"` asks in the background, `"mode": "batch"` submits one provider batch. Returns a `job_id`. |
 | `GET /jobs/{job_id}` | Job status, with the answers once done. Polling a batch job collects it when the provider has finished. |
 | `GET /sequences/{seq_md5}` | Every stored answer for a sequence, by the MD5 of its upper-case residues; filter with `?task=` and `?model=`. |
-| `GET /health`, `GET /models`, `GET /tasks` | Status and record count; installed providers, defaults and prices; tasks and prompt versions. |
+| `GET /health`, `GET /models`, `GET /tasks`, `GET /tasks/{name}/schema` | Status and record count; installed providers, defaults and prices; tasks, prompt versions and parameters; a task's answer schema. |
+
+Requests take the CLI's options as fields: `context`, `header_profile`, `params` (for ask templates), `payload`,
+`structured`, `shuffle_control`, `reuse` and `verify_input`.
 
 ```bash
 curl -s localhost:8000/annotate -H 'content-type: application/json' -d '{
@@ -150,7 +174,8 @@ from peptalk.providers import provider_for
 from peptalk.store import default_db_path
 
 model = "claude-fable-5-2"
-annotator = Annotator(provider_for(model), model=model, effort="high", store=Store(default_db_path()))
+annotator = Annotator(provider_for(model), model=model, effort="high", store=Store(default_db_path()),
+                      context="organism", payload=["confidence"])
 
 for a in annotator.annotate(read_fasta("examples/proteins.fasta"), ["active-site"], shuffle_control=True):
     print(a.id, a.condition, a.confidence, (a.answer or {}).get("catalytically_active"), a.cost_usd)
@@ -170,12 +195,52 @@ Each result is an `Annotation` (a Pydantic model). It carries the parsed `answer
 | `structure` | fs2f STRFN | helix and strand ranges, fold, 20 long-range contacts, function, functional residues, recognised or not |
 | `function` | new, **untested** | summary, family, GO molecular function / process / component terms, EC number |
 | `combined` | protein-function-agent reader, **untested merge** | the keys of `features` and `active-site` plus fold, function and recognised, in one question |
+| `localization` | new, **untested** | compartments, targeting signals with boundaries, transmembrane helices |
+| `ask-function` | new, **untested**; parameters `term`, `label` | does the protein have this GO function? yes / no / uncertain |
+| `ask-catalytic-residue` | new, **untested**; parameters `position`, `residue` | is this residue catalytic? (and is it really at that position?) |
+| `ask-localization` | new, **untested**; parameter `compartment` | is the protein located there? |
 
-Each sequence is sent alone under the header `>sequence`, wrapped at 60 residues. Your FASTA headers are never
-sent, so an identifier such as `sp|P00533|EGFR_HUMAN` cannot give the answer away, and the `protein_name` in a
-result is always the model's own. The three fs2f prompts are checked byte for byte against the study's scripts
-in the tests. A task's prompt version is a hash of its text,
-so an edited prompt never shares stored answers with the old one.
+Each sequence is sent alone, wrapped at 60 residues. Blind and with no payload, the three fs2f prompts are
+exactly the study's, which the tests check byte for byte. A task's prompt version is a hash of its prompt file,
+so an edited prompt never shares stored answers with the old one. Writing a new task is a prompt file and a
+small Python module: see [docs/templates.md](https://github.com/ai4curation/peptalk/blob/main/docs/templates.md).
+
+## Header context
+
+FASTA headers are parsed with a profile (`--header-profile`: `auto`, `uniprot`, `ncbi`, `plain`). All parsed
+fields are kept on each record (`header`): accession, entry name, name, organism, taxon id, gene and so on.
+`--context` sets how much of the header the model sees:
+
+| `--context` | The model sees |
+|---|---|
+| `blind` | `>sequence` only: the fs2f protocol |
+| `organism` (default) | `>sequence OS=Escherichia coli (strain K12) OX=83333` |
+| `full` | the whole header as given, accession and name included |
+
+The default is `organism`. An annotator legitimately knows the organism, and it helps: it decides whether a
+signal peptide or a chloroplast transit peptide is plausible, and which families to expect. It does not let the
+model copy an existing annotation. The full header usually carries a database name. Given one, the model may
+recall the entry instead of reading the sequence, and repeat whatever the name says; the study found submitter
+names the blind models rightly did not repeat. Use `full` only when headers carry trusted context that names
+nothing, and use `blind` for validation studies and comparisons with fs2f. The level is recorded on each
+record and is part of the cache key, so blind and informed answers never mix. A header with no organism gives the
+blind prompt at the `organism` level, and is recorded as `blind`.
+
+## Exports and GFF3
+
+`peptalk export --gff3` writes the located features of the answers: domains, TM helices, targeting signals,
+catalytic residues and secondary structure, with Sequence Ontology types and `Dbxref` where there is one.
+Contacts, function calls, GO terms and verdicts have no place in GFF3 and stay in the JSON or Parquet records,
+which each feature points back to. [docs/design.md](https://github.com/ai4curation/peptalk/blob/main/docs/design.md)
+gives the mapping, and also covers header profiles, templates, schemas and payloads.
+
+## Structured output (opt-in)
+
+By default peptalk asks for JSON in plain text and parses it, the protocol fs2f used, on every provider.
+`--structured` instead sends the task's JSON Schema to the provider for constrained decoding. It is off by
+default because it changes the question. On Claude Haiku 5.5 a 400-token prompt became a 2,447-token request,
+the provider adding schema instructions of its own. In one sample it also gave a different answer. The output
+mode is recorded and is part of the cache key.
 
 The default model is `claude-fable-5-2` at `high` effort, the strongest sequence reader in fs2f.
 `claude-opus-5-5` costs half as much per token. Effort labels are each provider's own (`low`, `medium`,
@@ -193,12 +258,16 @@ model how sure it is. Each record instead carries `checks` and a `confidence` de
 - `domain_bounds`, `tm_helix_bounds`, `secondary_structure_bounds`, `contacts_valid`: ranges fall inside the
   sequence, and contacts are at least 24 residues apart.
 - `pfam_accession_form`, `go_id_form`: identifiers are well formed (not that they exist or are right).
-- `shuffled_control` (with `--shuffle-control`): the shuffled copy got no domain, was not called active and was
-  not recognised. A transmembrane helix in a shuffled copy is not counted against the answer.
+- `shuffled_control` (with `--shuffle-control`): the shuffled copy got no domain, was not called active, was
+  not recognised, and got no "yes" to an ask question. A transmembrane helix in a shuffled copy is not counted
+  against the answer.
+- `claim_residue_matches_sequence` (ask templates): the residue a claim names is really at that position.
+- `evidence_residues_match_sequence` (with `-w evidence`): each residue the model cites is where it says.
 
 `confidence` is `checks_passed`, `flagged` (a check failed) or `no_answer` (failed call, refusal, tool
 invocation in the reply, or no valid answer object). `checks_passed` means only that these checks passed.
-Treat every answer as a hypothesis to verify.
+Treat every answer as a hypothesis to verify. This record-level `confidence` is peptalk's. The model's own stated
+probability, when asked for with `-w confidence`, is `answer.confidence`.
 
 ## The store: log and cache
 
@@ -213,8 +282,9 @@ Every call that reaches a provider is logged in a SQLite file, failures and refu
 - cost, stop reason, start and finish times, and the reply text
 
 Before asking, the annotator looks for a usable stored answer whose key fields match. The default key is
-`seq_md5,task,prompt_version,provider,model,effort`, so a renamed sequence is still found and an interrupted
-run resumes where it stopped. `--cache-key` sets other fields. For example,
+`seq_md5,task,prompt_version,params,context,payload,output,provider,model,effort`. A renamed sequence is still
+found and an interrupted run resumes where it stopped. Answers given with a different header context, payload or
+output mode are never reused. `--cache-key` sets other fields. For example,
 `--cache-key seq_md5,task,prompt_version,model` reuses an answer given at any effort, and adding `options`
 requires identical request options. Answers are sampled, so reuse returns a stored sample. A reused answer keeps
 the `uid` of the call that produced it.
@@ -308,7 +378,8 @@ Asp436Asn mutant, with the replies Fable 5.2 gave to them in fs2f.
 ## Citation
 
 Mungall CJ, Joachimiak MP. General-purpose language models are neurosymbolic reasoners able to annotate
-proteins from sequence. Preprint, 2026. https://github.com/ai4curation/fable-sequence-to-function
+proteins from sequence. 2026; preprint forthcoming. Manuscript:
+https://github.com/ai4curation/fable-sequence-to-function/blob/main/manuscript.pdf
 
 ## License
 
