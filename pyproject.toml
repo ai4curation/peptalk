@@ -1,0 +1,70 @@
+[project]
+name = "peptalk"
+version = "0.1.0"
+description = "Ask a frontier LLM what a protein sequence says, from sequence alone: domains, membrane features, active sites, structure and function of full-length proteins"
+readme = "README.md"
+authors = [
+    { name = "Chris Mungall", email = "cjm@berkeleybop.org" },
+    { name = "Marcin P. Joachimiak" }
+]
+requires-python = ">=3.11"
+license = "MIT"
+license-files = ["LICENSE"]
+keywords = ["protein", "annotation", "bioinformatics", "llm", "claude", "pfam", "gene ontology"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "Programming Language :: Python :: 3",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
+]
+dependencies = [
+    "anthropic>=2.14.0",
+    "pydantic>=2.14.4",
+    "typer>=0.29.2",
+]
+
+[project.optional-dependencies]
+gemini = [
+    "google-genai>=3.6.1",
+]
+openai = [
+    "openai>=3.59.0",
+]
+server = [
+    "fastapi>=0.165.0",
+    "uvicorn>=0.54.0",
+]
+parquet = [
+    "pyarrow>=26.0.1",
+]
+all = ["peptalk[gemini,openai,server,parquet]"]
+
+[project.scripts]
+peptalk = "peptalk.cli:app"
+
+[project.urls]
+Homepage = "https://github.com/ai4curation/peptalk"
+Study = "https://github.com/ai4curation/fable-sequence-to-function"
+
+[build-system]
+requires = ["uv_build>=0.12.3,<0.13.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "duckdb>=2.0.1",
+    "httpx>=0.28.1",
+    "mypy>=2.4.1",
+    "pytest>=9.2.0",
+    "ruff>=0.17.6",
+]
+
+[tool.pytest.ini_options]
+addopts = "--doctest-modules"
+testpaths = ["src", "tests"]
+
+[tool.ruff]
+line-length = 120
+
+[tool.mypy]
+ignore_missing_imports = true

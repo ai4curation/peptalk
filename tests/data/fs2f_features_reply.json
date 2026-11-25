@@ -1,0 +1,5 @@
+{
+ "accession": "A0ABQ0J1P6",
+ "condition": "real",
+ "text": "{\"pfam_domains\":[{\"accession\":\"PF00005\",\"name\":\"ABC_tran\",\"start\":22,\"end\":166}],\"transmembrane_helices\":[],\"signal_peptide\":false,\"protein_name\":\"Probable metal (manganese/zinc/iron) ABC transporter ATP-binding protein\",\"ec_number\":null,\"function\":\"Cytoplasmic ATP-binding subunit of an ABC-type importer, likely for divalent metal cations such as manganese or zinc, that couples ATP hydrolysis to substrate translocation across the membrane.\"}"
+}

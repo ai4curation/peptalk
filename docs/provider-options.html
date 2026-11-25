@@ -1,0 +1,367 @@
+<title>peptalk provider options</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=Space+Grotesk:wght@500;600&display=swap">
+<style>
+/* Layout: one reading column (~68ch) with full-width tables; a recommendation panel up top, measured facts as a residue-ruler strip. */
+:root {
+  --bg: #f6f7f9;
+  --surface: #ffffff;
+  --fg: #1b2330;
+  --muted: #5a6577;
+  --rule: #d9dee6;
+  --accent: #2f5d8a;
+  --accent-soft: #e4edf6;
+  --good: #2e6b4a;
+  --good-soft: #e3f1e8;
+  --warn: #8a5a12;
+  --warn-soft: #f7eddb;
+  --bad: #9b2f2f;
+  --bad-soft: #f6e3e3;
+  --code-bg: #eef1f5;
+  --font-display: "Space Grotesk", "IBM Plex Sans", system-ui, sans-serif;
+  --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #11151b; --surface: #171c24; --fg: #e3e8ef; --muted: #9aa5b5; --rule: #2a323e;
+    --accent: #8cb6e0; --accent-soft: #1c2a3a; --good: #7fc79d; --good-soft: #17291f;
+    --warn: #e0b46a; --warn-soft: #2d2415; --bad: #e59393; --bad-soft: #2e1a1a; --code-bg: #1d232c;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #11151b; --surface: #171c24; --fg: #e3e8ef; --muted: #9aa5b5; --rule: #2a323e;
+  --accent: #8cb6e0; --accent-soft: #1c2a3a; --good: #7fc79d; --good-soft: #17291f;
+  --warn: #e0b46a; --warn-soft: #2d2415; --bad: #e59393; --bad-soft: #2e1a1a; --code-bg: #1d232c;
+  color-scheme: dark;
+}
+body {
+  background: var(--bg); color: var(--fg);
+  font-family: var(--font-body); font-size: 1rem; line-height: 1.6;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 2.5rem 4rem;
+}
+main { max-width: 68rem; margin: 0 auto; display: grid; gap: 2.75rem; }
+.prose { max-width: 44rem; }
+h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; line-height: 1.2; margin: 0; }
+h1 { font-size: 2.1rem; font-weight: 600; letter-spacing: -0.01em; }
+h2 { font-size: 1.45rem; font-weight: 600; }
+h3 { font-size: 1.08rem; font-weight: 600; }
+p, ul, ol { margin: 0; }
+section { display: grid; gap: 1rem; }
+section > ul, section > ol, .prose ul, .prose ol { padding-left: 1.25rem; display: grid; gap: 0.4rem; }
+.eyebrow { font-family: var(--font-mono); font-size: 0.78rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.lede { font-size: 1.12rem; color: var(--fg); max-width: 44rem; }
+.muted { color: var(--muted); }
+a { color: var(--accent); }
+a:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+code, pre, .mono { font-family: var(--font-mono); font-size: 0.88em; }
+code { background: var(--code-bg); padding: 0.05em 0.35em; border-radius: 3px; }
+pre { background: var(--code-bg); padding: 1rem 1.1rem; border-radius: 6px; overflow-x: auto; line-height: 1.5; margin: 0; }
+pre code { background: none; padding: 0; }
+header { display: grid; gap: 0.75rem; }
+
+.verdict {
+  background: var(--accent-soft); border-left: 4px solid var(--accent);
+  padding: 1.25rem 1.4rem; border-radius: 0 6px 6px 0; display: grid; gap: 0.6rem; max-width: 48rem;
+}
+.verdict h2 { font-size: 1.15rem; }
+
+.ruler { display: grid; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); gap: 0; border-top: 2px solid var(--fg); }
+.ruler div { padding: 0.9rem 1rem 0.9rem 0; border-bottom: 1px solid var(--rule); display: grid; gap: 0.2rem; min-width: 0; }
+.ruler .n { font-family: var(--font-display); font-size: 1.5rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+.ruler .l { font-size: 0.9rem; color: var(--muted); }
+
+.options { display: grid; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); gap: 1rem; }
+.opt { background: var(--surface); border: 1px solid var(--rule); border-radius: 6px; padding: 1rem 1.1rem; display: grid; gap: 0.5rem; align-content: start; min-width: 0; }
+.opt .tag { font-family: var(--font-mono); font-size: 0.8rem; color: var(--muted); }
+.opt.excluded { opacity: 0.85; border-style: dashed; }
+.pill { display: inline-block; font-family: var(--font-mono); font-size: 0.72rem; letter-spacing: 0.05em; text-transform: uppercase; padding: 0.1rem 0.45rem; border-radius: 999px; }
+.pill.good { background: var(--good-soft); color: var(--good); }
+.pill.warn { background: var(--warn-soft); color: var(--warn); }
+.pill.bad { background: var(--bad-soft); color: var(--bad); }
+
+.cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr)); gap: 1.25rem; }
+.cols > * { min-width: 0; display: grid; gap: 0.6rem; align-content: start; }
+
+.table-wrap { overflow-x: auto; border: 1px solid var(--rule); border-radius: 6px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; min-width: 46rem; font-size: 0.93rem; }
+th, td { text-align: left; vertical-align: top; padding: 0.6rem 0.8rem; border-bottom: 1px solid var(--rule); }
+th { font-family: var(--font-display); font-weight: 600; background: var(--code-bg); }
+tr:last-child td { border-bottom: none; }
+td.y { color: var(--good); } td.n { color: var(--bad); } td.p { color: var(--warn); }
+.num { font-variant-numeric: tabular-nums; }
+
+details { background: var(--surface); border: 1px solid var(--rule); border-radius: 6px; padding: 0.8rem 1rem; }
+summary { cursor: pointer; font-weight: 600; }
+footer { font-size: 0.88rem; color: var(--muted); max-width: 48rem; display: grid; gap: 0.4rem; }
+</style>
+
+<main>
+  <header>
+    <p class="eyebrow">peptalk · design note · 25 November 2026</p>
+    <h1>How should peptalk talk to model APIs?</h1>
+    <p class="lede">peptalk (called seqfun-annotator when this note was written) sends one tool-free question per sequence and task to a frontier model, then parses, checks and prices the answer. This note compares four ways to build the provider layer, says what caching and batch APIs buy for this workload, and asks whether protein-function-agent should reuse it.</p>
+  </header>
+
+  <div class="verdict">
+    <h2>Decision, 25 November 2026</h2>
+    <p><strong>Direct clients for every provider.</strong> If calling close to the metal is best for Anthropic, it is best for all. peptalk keeps its own thin clients for Anthropic (Messages API), Gemini (generateContent) and OpenAI (Responses API). Each sends exactly the protocol, records the same provenance and passes the same input-token check. All three have batch support through their providers' batch APIs. Agents write and maintain this code, so the convenience of a wrapper does not decide it. llm is not used as the provider layer; llm templates for one-off reads are optional and low priority.</p>
+    <p><strong>Logging and caching.</strong> Every call is logged with full provenance in a local SQLite store, which is also the cache. The cache key is a set of fields, by default the sequence MD5 (as UniParc uses), task, prompt version, provider, model and effort, so a renamed sequence still hits and a changed prompt never does.</p>
+    <p><strong>Built to merge.</strong> Records are keyed by sequence checksum and call id, exports from different people merge without duplicates, and the annotated sequences can be written as FASTA for a DIAMOND or BLAST database. A shared, searchable database is designed (<code>docs/shared-database.md</code>), not built.</p>
+    <p><strong>PFA.</strong> The host runs peptalk for the blind read and hands the JSON to the reviewer. PFA's merged prompt is now peptalk's <code>combined</code> task, marked untested.</p>
+  </div>
+
+  <div class="verdict" style="background: var(--surface); border-left-color: var(--rule)">
+    <h2>Recommendation given before the decision</h2>
+    <p><strong>Every read goes as a direct, single-shot API call: the prompt and the sequence, and nothing else.</strong> That clean route is a core reason peptalk exists. fs2f's main Claude runs went through the Claude Code command line, which cannot rule out extra context or connector tools. Those runs should be treated as possibly contaminated, and peptalk is the tooling for repeating and extending them.</p>
+    <p><strong>For Anthropic models, call the Messages API through the <code>anthropic</code> client ourselves (A). For every other provider, use llm as an optional extra (B).</strong> A gives exact control of every field in the request and shares one request builder with the half-price batch path. It also has fewer moving parts: one HTTP client, no plugins, no per-user llm settings. B gives uniform access to Gemini, OpenAI and any other plugin model without client code of ours. Ship the four prompts as llm templates as well, for one-off reads. Drop the hand-written Gemini and OpenAI clients. Don't use litellm.</p>
+    <p><strong>For PFA:</strong> run the sequence read through peptalk on the host and hand the JSON to the reviewer, instead of running a tool-free managed-agent session for it.</p>
+  </div>
+
+  <section>
+    <p class="eyebrow">Measured in this session</p>
+    <div class="ruler">
+      <div><span class="n num">829 = 829</span><span class="l">input tokens a live direct call reported, and the count_tokens figure for that prompt alone: nothing was added</span></div>
+      <div><span class="n num">5,851–97,813</span><span class="l">input tokens the fs2f command-line route carried for short prompts (original flags; fs2f decoy-control check)</span></div>
+      <div><span class="n num">212–315</span><span class="l">tokens in the fixed prompt before the sequence (count_tokens, Fable 5.2 and Opus 5.5)</span></div>
+      <div><span class="n num">512</span><span class="l">smallest prefix Anthropic will cache on current models, so the prompts are too short to cache</span></div>
+      <div><span class="n num">48 s · $0.19</span><span class="l">one Fable 5.2 high-effort active-site read of the ROP17 D436N mutant; it found D436N and called the kinase inactive</span></div>
+      <div><span class="n num">829 / 4,572</span><span class="l">input / output tokens of that call, 3,924 of them thinking. Input was 3.5% of the cost</span></div>
+      <div><span class="n num">$0.005</span><span class="l">six live calls with Haiku 5.5 at low effort (smoke test)</span></div>
+    </div>
+  </section>
+
+  <section class="prose">
+    <h2>Why direct API calls</h2>
+    <p>fs2f asked its Claude questions through the Claude Code command line (<code>claude -p --system-prompt "" --tools ""</code>). That route adds context of its own and, on an account with connectors, can attach connector tools. fs2f's own check (<code>experiments/decoy_control/README.md</code>) measured the extra input:</p>
+    <div class="table-wrap">
+      <table style="min-width:34rem">
+        <thead><tr><th>Route</th><th>Question</th><th class="num">Input tokens</th></tr></thead>
+        <tbody>
+          <tr><td>CLI, original flags</td><td>one sentence, Haiku 5.5</td><td class="num">5,851</td></tr>
+          <tr><td>CLI, original flags</td><td>two PSEUDO questions to Fable 5.2, 23 s apart</td><td class="num">97,813 and 6,413</td></tr>
+          <tr><td>CLI, revised flags (settings, MCP, slash commands, Chrome off)</td><td>one sentence, Haiku 5.5</td><td class="num">573</td></tr>
+          <tr><td>Messages API, peptalk</td><td>active-site question, ROP17 D436N (count_tokens: 829)</td><td class="num">829</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>The larger CLI figure most likely came from connector tools. Whether the stored fs2f rows carried such an attachment is not known: they record cost, not tokens. The revised flags still leave about 570 tokens the tool adds itself. A direct call to the Messages API, or to Gemini's <code>generateContent</code> or OpenAI's Responses API, carries only what the caller sends, and the reported input count can be checked against a token count of the prompt. peptalk is built on that route so that the fs2f results can be repeated cleanly, more robustly and at scale. Results from the CLI route should be read as possibly contaminated until they are.</p>
+  </section>
+
+  <section class="prose">
+    <h2>Single-shot API calls: a refresher</h2>
+    <p>Agent frameworks hide most of this. For a one-question, one-answer call, the practice that matters is:</p>
+    <ul>
+      <li><strong>Send exactly the protocol.</strong> One user message, no system prompt, no tools. Anything a client, wrapper or CLI adds becomes part of the experiment, so check the reported input tokens against a token count of the prompt.</li>
+      <li><strong>Set effort explicitly.</strong> Defaults differ by model: Opus 5.5 defaults to <code>medium</code>, most others to <code>high</code>. Thinking is always on for Fable 5.2 and Opus 5.5, and adaptive thinking replaces fixed thinking budgets.</li>
+      <li><strong>Leave room for thinking.</strong> Thinking counts toward <code>max_tokens</code>. fs2f saw Opus 4.6 hit 64,000 output tokens on structure questions. Stream long requests, or the HTTP call can time out.</li>
+      <li><strong>Read <code>stop_reason</code> before the content.</strong> <code>refusal</code> (safety classifier, HTTP 200) and <code>max_tokens</code> both leave no usable answer.</li>
+      <li><strong>Record provenance.</strong> Keep the served model (fallbacks can change it), the prompt hash, the effort, token counts including thinking, and cost.</li>
+      <li><strong>Let the SDK retry</strong> 429s, 5xx and connection errors. Catch the SDK's own error classes only at the edge of the run, so one failure does not stop a batch of thousands.</li>
+      <li><strong>Treat answers as samples.</strong> Temperature can't be set on these models, so a cache is the reproducibility record, not just a saving.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>The four options</h2>
+    <div class="options">
+      <div class="opt">
+        <span class="tag">A · current code</span>
+        <h3>Own thin clients</h3>
+        <p>About 60 lines per provider over each provider's HTTP client package. For Anthropic that is <code>anthropic</code>: a typed client for the Messages API, not the Agent SDK, with nothing agentic in it. We set every field: the prompt, <code>max_tokens</code>, adaptive thinking and <code>output_config.effort</code>. The same request builder feeds the batch path.</p>
+        <p><span class="pill good">full control</span> <span class="pill warn">we maintain each provider</span></p>
+      </div>
+      <div class="opt">
+        <span class="tag">B · llm as library</span>
+        <h3>llm's Python API</h3>
+        <p><code>llm.get_model(id).prompt(text, **options)</code> for any model a plugin provides. llm-anthropic is itself built on the <code>anthropic</code> package and sends nearly the same request as A (captured below). llm-gemini sets <code>thinking_level</code>.</p>
+        <p><span class="pill good">any plugin model</span> <span class="pill warn">options and errors differ by provider</span></p>
+      </div>
+      <div class="opt">
+        <span class="tag">C · templates + package</span>
+        <h3>llm templates, thin package on llm</h3>
+        <p>Templates carry prompt, model and options, so <code>llm -t peptalk-feat -m claude-fable-5-2 -o thinking_effort high</code> works for one sequence. The package does the rest on top of B.</p>
+        <p><span class="pill good">zero-code one-offs</span> <span class="pill bad">template alone sends the FASTA header</span></p>
+      </div>
+      <div class="opt excluded">
+        <span class="tag">D · excluded</span>
+        <h3>litellm</h3>
+        <p>Excluded at Chris's request after its past security and supply-chain incidents. It is also a large dependency for a tool that needs one request shape. A compatibility layer also tends to lag new provider parameters such as effort, adaptive thinking and refusal fallbacks.</p>
+        <p><span class="pill bad">not considered further</span></p>
+      </div>
+    </div>
+    <details>
+      <summary>What templates alone cannot do</summary>
+      <ul style="margin-top:0.6rem; padding-left:1.25rem; display:grid; gap:0.35rem">
+        <li>A template's <code>$input</code> is all of standard input. The FASTA header goes to the model, and a header like <code>sp|P00533|EGFR_HUMAN</code> gives the answer away. fs2f sent <code>&gt;sequence</code>.</li>
+        <li>A multi-sequence FASTA becomes a single prompt.</li>
+        <li>Effort option names differ (<code>thinking_effort</code> for Claude, <code>thinking_level</code> for Gemini), so a template either fixes one provider or the user passes <code>-o</code>.</li>
+        <li><code>--schema</code> switches to constrained decoding. fs2f asked for JSON in plain text, so schema variants are a new, untested route and should be opt-in.</li>
+        <li>No shuffled controls, residue checks, skipping of repeats, prices or batch.</li>
+      </ul>
+    </details>
+  </section>
+
+  <section>
+    <h2>Is llm awkward as a Python library?</h2>
+    <p class="prose">Tested live with llm 0.38, llm-anthropic 0.31 and llm-gemini 0.38.1. For a single call it is not awkward:</p>
+    <div class="cols">
+      <div>
+        <h3>B: llm</h3>
+<pre><code>import llm
+
+model = llm.get_model("anthropic/claude-fable-5-2")  # llm's id
+r = model.prompt(prompt, thinking_effort="high")
+# Gemini would need thinking_level="high"
+text = r.text()
+r.usage()   # Usage(input=36, output=15, details=
+            #  {'output_tokens_details': {'thinking_tokens': 0}})
+r.json()["model"], r.json()["stop_reason"]</code></pre>
+      </div>
+      <div>
+        <h3>A: Anthropic SDK</h3>
+<pre><code>import anthropic
+
+client = anthropic.Anthropic()
+with client.messages.stream(
+    model="claude-fable-5-2", max_tokens=64_000,
+    messages=[{"role": "user", "content": prompt}],
+    thinking={"type": "adaptive"},
+    output_config={"effort": "high"},
+) as s:
+    msg = s.get_final_message()</code></pre>
+      </div>
+    </div>
+    <p class="prose">What worked: model lookup, options as keyword arguments (validated, so a misspelt option is an error), Pydantic schemas, async models (<code>llm.get_async_model</code>), token usage with thinking, the raw response JSON, and keys from <code>ANTHROPIC_API_KEY</code> or <code>llm keys</code>. The Python API does not log to SQLite unless you call <code>response.log_to_db()</code>.</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Where it is awkward</th><th>What we saw</th><th>Cost to peptalk</th></tr></thead>
+        <tbody>
+          <tr><td>Options named per provider</td><td><code>thinking_effort</code> (Claude), <code>thinking_level</code> (Gemini); passing the other is a <code>ValidationError</code></td><td>A small effort-to-option map, which peptalk has to keep anyway</td></tr>
+          <tr><td>Errors are not wrapped</td><td>A bad key raised <code>anthropic.AuthenticationError</code>, not <code>llm.ModelError</code></td><td>Catch each provider SDK's error class, as in A</td></tr>
+          <tr><td>Global state</td><td>Plugins load from every installed entry point. Models come from the user's llm directory: Chris's own extra OpenAI-compatible models showed up in the listing</td><td>Results can depend on the machine's llm setup. Record the plugin versions</td></tr>
+          <tr><td>Typing</td><td>Options arrive as <code>**kwargs</code>; usage details are a plain dict</td><td>Minor</td></tr>
+          <tr><td>Testing</td><td>No built-in fake model; register one through a plugin hook or replace <code>get_model</code></td><td>Minor; peptalk's provider interface already takes a fake</td></tr>
+          <tr><td>No batch APIs</td><td>Nothing for Message Batches or OpenAI or Gemini batch</td><td>Batch stays on the provider SDK</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <h3>What llm-anthropic actually sends</h3>
+    <p class="prose">Both clients were pointed at a local capture server with the same prompt, model <code>claude-fable-5-2</code> and effort <code>high</code>. Neither sent a system prompt, tools, beta headers or anything besides the prompt. The differences:</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Field</th><th>peptalk (A)</th><th>llm-anthropic 0.31 (B)</th><th>Matters?</th></tr></thead>
+        <tbody>
+          <tr><td><code>system</code>, <code>tools</code>, <code>anthropic-beta</code></td><td>none</td><td>none</td><td>Both clean</td></tr>
+          <tr><td>message content</td><td>a string</td><td>one text block</td><td>No; the same input to the model</td></tr>
+          <tr><td><code>temperature</code></td><td>not sent</td><td><code>1.0</code>, always</td><td>Not now: it is the default and Fable 5.2 and Opus 5.5 accepted it live. API version 2026-10-21 rejects any sampling parameter, so it will matter when llm-anthropic moves to that version</td></tr>
+          <tr><td><code>thinking.display</code></td><td>not sent (omitted)</td><td><code>summarized</code></td><td>Returns a thinking summary; the thinking done and billed is the same</td></tr>
+          <tr><td><code>max_tokens</code></td><td>64,000 (option)</td><td>128,000 (model maximum)</td><td>Only for runaway answers</td></tr>
+          <tr><td><code>anthropic-version</code> header</td><td>2026-10-21</td><td>2023-06-01</td><td>Older API version</td></tr>
+          <tr><td>client package</td><td><code>anthropic</code> 2.14</td><td><code>anthropic</code> 1.17; llm-anthropic requires <code>&gt;=1.5,&lt;2</code></td><td>Yes: the two can't share an environment until peptalk allows 1.x. peptalk's tests pass on 1.17, so its pin can be loosened</td></tr>
+          <tr><td>model id</td><td><code>claude-fable-5-2</code></td><td><code>anthropic/claude-fable-5-2</code> or alias <code>claude-fable-5.2</code>; the plain API id is unknown to llm</td><td>A name map, or the user learns llm's ids</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="prose">So Chris's recollection is half right. Wrapping one call is easy. A tool that promises the same protocol on every provider still has to handle option names, errors and batch itself, which leaves llm with the transport and model discovery for providers peptalk does not otherwise support.</p>
+  </section>
+
+  <section>
+    <h2>Caching</h2>
+    <div class="cols">
+      <div>
+        <h3>Result cache (ours)</h3>
+        <p>A JSON file per completion, keyed by provider, model, effort and the full prompt. A rerun asks only what is missing, so an interrupted job of 5,000 proteins resumes where it stopped. Batch results are written to the same cache.</p>
+      </div>
+      <div>
+        <h3>llm's log</h3>
+        <p>The CLI logs every prompt and response to SQLite. It is a record, not a cache. llm does not skip a prompt it has already answered, and the Python API logs only when asked.</p>
+      </div>
+      <div>
+        <h3>Provider prompt caching</h3>
+        <p>Anthropic caches a marked prefix (<code>cache_control</code>). A read costs 0.1× input on most models, 0.05× on Opus 5.5 and 0.025× on Fable 5.2, and a write 1.25×. OpenAI caches prefixes of 1,024 tokens or more automatically. Gemini has implicit caching and explicit context caches with a storage fee.</p>
+      </div>
+    </div>
+    <p class="prose"><strong>For peptalk, provider caching does nothing.</strong> The fixed part of each prompt is 212 to 315 tokens, below Anthropic's 512-token minimum, and the sequence is the part that changes. Even if it cached, input is about 3.5% of the cost; thinking and output are the rest. A long shared system prompt, such as a Pfam list, would make caching pay, but it would also change the protocol being tested.</p>
+  </section>
+
+  <section>
+    <h2>Batch APIs</h2>
+    <p class="prose">A batch API takes many requests at once and returns the results later, at half price. All three providers have one:</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th></th><th>Anthropic Message Batches</th><th>OpenAI Batch</th><th>Gemini batch mode</th></tr></thead>
+        <tbody>
+          <tr><td>Price</td><td>50% of standard</td><td>50% of standard</td><td>50% of standard</td></tr>
+          <tr><td>Turnaround</td><td>most within 1 hour, at most 24 hours</td><td>24-hour window</td><td>24-hour target</td></tr>
+          <tr><td>Submit</td><td>requests in the call; up to 100,000 or 256 MB</td><td>upload a JSONL file</td><td>inline requests or a JSONL file</td></tr>
+          <tr><td>In peptalk</td><td class="y">yes: <code>peptalk batch submit / status / collect</code></td><td class="n">not yet</td><td class="n">not yet</td></tr>
+          <tr><td>In llm</td><td class="n">no</td><td class="n">no</td><td class="n">no</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="cols">
+      <div>
+        <h3>What it buys</h3>
+        <ul style="padding-left:1.25rem; display:grid; gap:0.35rem">
+          <li>Half the cost. At fs2f's recorded median of $0.07 per Fable 5.2 features question, 10,000 proteins with shuffled controls come to about $700 by batch instead of $1,400.</li>
+          <li>No rate-limit handling or client-side concurrency.</li>
+          <li>High throughput, well suited to proteome-scale runs.</li>
+        </ul>
+      </div>
+      <div>
+        <h3>What it costs</h3>
+        <ul style="padding-left:1.25rem; display:grid; gap:0.35rem">
+          <li>Latency: minutes to a day, so not for interactive use.</li>
+          <li>An asynchronous workflow: a manifest, polling, then collecting. peptalk saves the manifest to disk, so a collect can run later from another shell.</li>
+          <li>No streaming and no server-side refusal fallback inside a batch.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Should protein-function-agent use peptalk?</h2>
+    <p class="prose">PFA (PR #1) runs its sequence reader as a separate managed-agent session with no tools. The host writes the reader's only message, so the read is blind. Its prompt merges the keys of the FEAT, PSEUDO and STRFN questions into one, and that merged prompt was not itself tested in fs2f. Its <code>validate.py</code> repeats the residue-position and domain-bound checks that peptalk has. In the YrfG example the reader cost $0.12 and took 19 seconds.</p>
+    <div class="cols">
+      <div>
+        <h3>Option 1: PFA imports peptalk's prompt, schema and checks</h3>
+        <p>One source of prompts, answer models and checks. The reader stays a managed-agent session. Little change to PFA.</p>
+      </div>
+      <div>
+        <h3>Option 2: the host runs peptalk, the reviewer gets the JSON <span class="pill good">recommended</span></h3>
+        <p>A tool-free single question does not need an agent session or a sandbox. A direct call is just as blind, since the host still writes the message. It is also cached and recorded with the served model and cost. Many proteins can go by batch at half price, and the same reads serve curation pipelines outside PFA.</p>
+      </div>
+    </div>
+    <p class="prose">With option 2, add PFA's merged prompt to peptalk as a task (say <code>combined</code>), marked as an untested merge, so there is a single source of prompts. That also lets someone compare it with the three separate fs2f prompts on the fs2f test sets.</p>
+  </section>
+
+  <section>
+    <h2>Side by side</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th></th><th>A · own clients</th><th>B · llm library</th><th>C · templates + package</th><th>Recommended: A for Anthropic + B for the rest + templates</th></tr></thead>
+        <tbody>
+          <tr><td>Request carries only the prompt</td><td class="y">yes; every field set by us</td><td class="y">yes; adds <code>temperature: 1.0</code> and a thinking summary</td><td class="p">only if the FASTA header is kept out</td><td class="y">yes</td></tr>
+          <tr><td>Moving parts on the Anthropic path</td><td class="y">one HTTP client</td><td class="p">llm, plugin, user's llm settings, HTTP client</td><td class="p">same as B</td><td class="y">one HTTP client</td></tr>
+          <tr><td>Gemini, OpenAI and other models</td><td class="p">only what we write</td><td class="y">any llm plugin</td><td class="y">any llm plugin</td><td class="y">any llm plugin</td></tr>
+          <tr><td>Batch at half price</td><td class="y">Anthropic</td><td class="n">needs a provider SDK</td><td class="n">needs a provider SDK</td><td class="y">Anthropic</td></tr>
+          <tr><td>Skips repeats and resumes runs</td><td class="y">peptalk cache</td><td class="y">peptalk cache</td><td class="p">package only</td><td class="y">peptalk cache</td></tr>
+          <tr><td>One-off CLI read</td><td class="y"><code>peptalk annotate</code></td><td class="y"><code>peptalk annotate</code></td><td class="y"><code>llm -t</code></td><td class="y">both</td></tr>
+          <tr><td>Core dependencies</td><td>anthropic, pydantic, typer</td><td>+ llm, plugins</td><td>+ llm, plugins</td><td>anthropic (pin loosened to allow 1.x), pydantic, typer; llm as an extra</td></tr>
+          <tr><td>Code we maintain per provider</td><td class="n">about 60 lines each</td><td class="y">an option-name map</td><td class="y">an option-name map</td><td class="y">Anthropic only</td></tr>
+          <tr><td>Tested as a whole</td><td class="y">fakes per SDK</td><td class="p">fake model needed</td><td class="p">templates untestable in pytest</td><td class="y">fakes, plus a fake llm model</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <footer>
+    <p>Sources: live tests on 25 November 2026 with llm 0.38, llm-anthropic 0.31, llm-gemini 0.38.1 and anthropic 2.14; Anthropic token counts from the count_tokens endpoint; request contents captured with a local HTTP server standing in for the API. CLI-route token counts are from fable-sequence-to-function, experiments/decoy_control/README.md. fs2f costs are medians of the recorded Fable 5.2 rows in ai4curation/fable-sequence-to-function, collected through a command-line route that added context of its own. The OpenAI and Gemini batch and caching terms are from the providers' documentation as last reviewed, not measured here; check them before relying on them.</p>
+  </footer>
+</main>
