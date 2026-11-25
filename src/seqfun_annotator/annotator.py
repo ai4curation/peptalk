@@ -1,4 +1,4 @@
-"""Annotating sequences: build prompts, call the provider (or the cache), parse, check, and price.
+"""Annotating sequences: build prompts, call the provider (or reuse a stored answer), parse, check, price, log.
 
 >>> from seqfun_annotator.providers import get_provider
 >>> from seqfun_annotator.fasta import SequenceRecord
@@ -6,24 +6,29 @@
 >>> out = ann.annotate([SequenceRecord(id="p1", sequence="MKTAYIAKQR")], ["features"], shuffle_control=True)
 >>> [(a.id, a.condition, a.confidence) for a in out]
 [('p1', 'real', 'checks_passed'), ('p1', 'shuffled', 'checks_passed')]
+>>> [c.name for c in out[0].checks]
+['input_tokens_match', 'shuffled_control']
 """
 
 from __future__ import annotations
 
 import datetime
+import time
+import uuid
 from collections.abc import Callable, Iterable, Sequence
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 
 from pydantic import BaseModel, ValidationError
 
-from seqfun_annotator.cache import Cache
-from seqfun_annotator.checks import check_answer, control_check
+from seqfun_annotator import __version__
+from seqfun_annotator.checks import check_answer, control_check, input_check
 from seqfun_annotator.fasta import SequenceRecord, shuffle_sequence
 from seqfun_annotator.parse import answer_object, has_tool_call
 from seqfun_annotator.pricing import Price, cost, price_for
 from seqfun_annotator.providers.base import Provider, ProviderError
 from seqfun_annotator.schema import Annotation, Completion, Confidence
+from seqfun_annotator.store import Store
 from seqfun_annotator.tasks import Task, get_task, prompt_sha256
 
 
@@ -39,6 +44,10 @@ class Question:
     @property
     def prompt(self) -> str:
         return self.task.prompt_for(self.sequence)
+
+    @property
+    def seq_md5(self) -> str:
+        return SequenceRecord(id=self.record.id, sequence=self.sequence).md5
 
 
 def build_questions(records: Iterable[SequenceRecord], tasks: Sequence[str], shuffle_control: bool) -> list[Question]:
@@ -59,7 +68,7 @@ def build_questions(records: Iterable[SequenceRecord], tasks: Sequence[str], shu
 
 
 def now() -> str:
-    return datetime.datetime.now(datetime.UTC).isoformat(timespec="seconds")
+    return datetime.datetime.now(datetime.UTC).isoformat(timespec="milliseconds")
 
 
 def parse_answer(task: Task, text: str) -> tuple[BaseModel | None, dict | None, str | None]:
@@ -82,67 +91,67 @@ def parse_answer(task: Task, text: str) -> tuple[BaseModel | None, dict | None, 
 
 def confidence(ann: Annotation) -> Confidence:
     """``no_answer`` without a valid answer, ``flagged`` if any check failed, else ``checks_passed``."""
-    if ann.answer is None or ann.validation_error:
+    if ann.answer is None or ann.validation_error or ann.error:
         return "no_answer"
     return "checks_passed" if all(c.passed for c in ann.checks) else "flagged"
 
 
-def make_annotation(
-    q: Question,
-    completion: Completion | None,
-    *,
-    provider: str,
-    model: str,
-    effort: str,
-    price: Price | None,
-    cached: bool = False,
-    batch: bool = False,
-    error: str | None = None,
-) -> tuple[Annotation, BaseModel | None]:
-    """An annotation record for one question, and its validated answer (for the shuffled-control check)."""
-    ann = Annotation(
+def new_annotation(q: Question, provider: Provider, model: str, effort: str) -> Annotation:
+    """A record for a question before it is asked: identity, provenance and request options."""
+    return Annotation(
+        uid=uuid.uuid4().hex,
         id=q.record.id,
         description=q.record.description,
         task=q.task.name,
         condition=q.condition,  # type: ignore[arg-type]
+        sequence=q.sequence,
+        seq_md5=q.seq_md5,
         sequence_length=len(q.sequence),
-        sequence_sha256=SequenceRecord(id=q.record.id, sequence=q.sequence).sha256,
-        provider=provider,
+        provider=provider.name,
         model=model,
         effort=effort,
+        options=provider.request_options(model, effort),
+        client=provider.client_version,
+        seqfun_version=__version__,
+        prompt_version=q.task.version,
         prompt_sha256=prompt_sha256(q.prompt),
-        error=error,
-        cached=cached,
-        batch=batch,
-        asked_at=now(),
+        started_at=now(),
     )
-    if completion is None:
-        return ann, None
-    parsed, raw, problem = parse_answer(q.task, completion.text)
-    ann.text = completion.text
-    ann.answer = raw
-    ann.validation_error = problem
-    ann.usage = completion.usage
-    ann.served_model = completion.served_model
-    ann.fallback_used = completion.fallback_used
-    ann.stop_reason = completion.stop_reason
-    ann.cost_usd = cost(completion.usage, price, batch=batch)
-    if completion.stop_reason and completion.stop_reason.startswith("refusal"):
-        ann.error = completion.stop_reason
-    if parsed is not None:
-        ann.checks = check_answer(q.task.name, parsed, q.sequence)
+
+
+def fill(ann: Annotation, q: Question, completion: Completion | None, price: Price | None) -> BaseModel | None:
+    """Add a completion to a record: parse, check and price it. Returns the validated answer."""
+    ann.checks = []
+    parsed = None
+    if completion is not None:
+        parsed, raw, problem = parse_answer(q.task, completion.text)
+        ann.text = completion.text
+        ann.answer = raw
+        ann.validation_error = problem
+        ann.usage = completion.usage
+        ann.served_model = completion.served_model
+        ann.fallback_used = completion.fallback_used
+        ann.stop_reason = completion.stop_reason
+        ann.response_id = completion.response_id
+        ann.cost_usd = cost(completion.usage, price, batch=ann.batch)
+        if completion.stop_reason and completion.stop_reason.startswith("refusal"):
+            ann.error = completion.stop_reason
+        if ann.expected_input_tokens is not None:
+            ann.checks.append(input_check(completion.usage, ann.expected_input_tokens))
+        if parsed is not None:
+            ann.checks.extend(check_answer(q.task.name, parsed, q.sequence))
     ann.confidence = confidence(ann)
-    return ann, parsed
+    return parsed
 
 
-def finalize(pairs: list[tuple[Question, Annotation, BaseModel | None]]) -> list[Annotation]:
-    """Attach shuffled-control checks to the real answers and set each record's confidence."""
-    shuffled = {(q.record.id, q.task.name): parsed for q, _, parsed in pairs if q.condition == "shuffled"}
-    have_shuffled = {(q.record.id, q.task.name) for q, _, _ in pairs if q.condition == "shuffled"}
+def finalize(triples: list[tuple[Question, Annotation, BaseModel | None]]) -> list[Annotation]:
+    """Attach shuffled-control checks to the real answers and reset each record's confidence."""
+    shuffled = {(q.record.id, q.task.name): parsed for q, _, parsed in triples if q.condition == "shuffled"}
     out = []
-    for q, ann, _ in pairs:
+    for q, ann, _ in triples:
         key = (q.record.id, q.task.name)
-        if q.condition == "real" and key in have_shuffled and ann.answer is not None:
+        if q.condition == "real" and key in shuffled and ann.answer is not None:
+            ann.checks = [c for c in ann.checks if c.name != "shuffled_control"]
             ann.checks.append(control_check(shuffled[key]))
         ann.confidence = confidence(ann)
         out.append(ann)
@@ -150,43 +159,61 @@ def finalize(pairs: list[tuple[Question, Annotation, BaseModel | None]]) -> list
 
 
 class Annotator:
-    """Ask a provider every task for every sequence, through a cache, with optional shuffled controls."""
+    """Ask a provider every task for every sequence, reusing stored answers, with optional shuffled controls.
+
+    With ``verify_input`` (the default) each prompt's input tokens are counted by the provider's counting endpoint
+    before the call, and the record gets an ``input_tokens_match`` check: the call's reported input must equal
+    the count, so nothing besides the prompt was sent.
+    """
 
     def __init__(
         self,
         provider: Provider,
         model: str,
         effort: str = "high",
-        cache: Cache | None = None,
+        store: Store | None = None,
         prices: dict[str, Price] | None = None,
         concurrency: int = 4,
+        verify_input: bool = True,
+        reuse: bool = True,
     ):
         self.provider = provider
         self.model = model
         self.effort = effort
-        self.cache = cache
-        self.price = price_for(model, prices)
+        self.store = store
+        self.prices = prices
         self.concurrency = concurrency
+        self.verify_input = verify_input
+        self.reuse = reuse
 
-    def cached(self, q: Question) -> Completion | None:
-        if self.cache is None:
+    def stored(self, q: Question) -> Annotation | None:
+        """A stored answer to reuse for this question, or None."""
+        if self.store is None or not self.reuse:
             return None
-        return self.cache.get(self.provider.name, self.model, self.effort, q.prompt)
+        hit = self.store.lookup(new_annotation(q, self.provider, self.model, self.effort))
+        if hit is None:
+            return None
+        return hit.model_copy(update={"id": q.record.id, "description": q.record.description, "cached": True})
 
     def ask(self, q: Question) -> tuple[Question, Annotation, BaseModel | None]:
-        kw = {"provider": self.provider.name, "model": self.model, "effort": self.effort, "price": self.price}
-        hit = self.cached(q)
+        hit = self.stored(q)
         if hit is not None:
-            ann, parsed = make_annotation(q, hit, cached=True, **kw)  # type: ignore[arg-type]
-            return q, ann, parsed
+            # re-parse and re-check with the current code; the stored call keeps its uid, cost and timestamps
+            return q, hit, fill(hit, q, hit.completion(), price_for(hit.model, self.prices))
+        ann = new_annotation(q, self.provider, self.model, self.effort)
+        t0 = time.monotonic()
+        completion: Completion | None = None
         try:
+            if self.verify_input:
+                ann.expected_input_tokens = self.provider.count_tokens(q.prompt, self.model)
             completion = self.provider.complete(q.prompt, self.model, self.effort)
         except ProviderError as e:
-            ann, _ = make_annotation(q, None, error=str(e), **kw)  # type: ignore[arg-type]
-            return q, ann, None
-        if self.cache is not None and not (completion.stop_reason or "").startswith("refusal"):
-            self.cache.put(self.provider.name, self.model, self.effort, q.prompt, completion)
-        ann, parsed = make_annotation(q, completion, **kw)  # type: ignore[arg-type]
+            ann.error = str(e)
+        ann.finished_at = now()
+        ann.duration_ms = int((time.monotonic() - t0) * 1000)
+        parsed = fill(ann, q, completion, price_for(self.model, self.prices))
+        if self.store is not None:
+            self.store.add(ann)
         return q, ann, parsed
 
     def annotate(
@@ -198,10 +225,15 @@ class Annotator:
     ) -> list[Annotation]:
         """Annotate records; results come back in question order."""
         questions = build_questions(records, tasks, shuffle_control)
-        pairs = []
+        triples = []
         with ThreadPoolExecutor(self.concurrency) as ex:
             for triple in ex.map(self.ask, questions):
-                pairs.append(triple)
+                triples.append(triple)
                 if progress:
                     progress(triple[1])
-        return finalize(pairs)
+        out = finalize(triples)
+        if self.store is not None:
+            for a in out:
+                if not a.cached:
+                    self.store.update(a)  # adds the shuffled-control check to the logged record
+        return out

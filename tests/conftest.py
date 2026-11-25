@@ -25,13 +25,22 @@ def features_reply():
 
 
 class ScriptedProvider:
-    """Answers by looking up a function of the prompt; counts calls."""
+    """Answers by looking up a function of the prompt; counts calls. Reports 1000 input tokens, and counts
+    ``extra`` fewer for the prompt alone (so extra > 0 simulates hidden context)."""
 
     name = "scripted"
+    client_version = "scripted 0"
 
-    def __init__(self, reply):
+    def __init__(self, reply, extra=0):
         self.reply = reply
+        self.extra = extra
         self.prompts: list[str] = []
+
+    def request_options(self, model, effort):
+        return {"effort": effort}
+
+    def count_tokens(self, prompt, model):
+        return 1000 - self.extra
 
     def complete(self, prompt, model, effort):
         self.prompts.append(prompt)

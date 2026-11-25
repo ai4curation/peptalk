@@ -1,12 +1,11 @@
-"""Claude through the Anthropic Messages API.
+"""Claude through the Anthropic Messages API, with the ``anthropic`` HTTP client.
 
-Each question is one user message with no system prompt and no tools, as in the fs2f runs, with adaptive
-thinking and the requested effort (``low``, ``medium``, ``high``, ``xhigh``, ``max``). Requests stream, since
-high-effort answers can run for minutes.
+Each question is one user message with no system prompt and no tools, with adaptive thinking and the requested
+effort (``low``, ``medium``, ``high``, ``xhigh``, ``max``). Requests stream, since high-effort answers can run for
+minutes. The batch path sends the same request through the Message Batches API.
 
-Server-side refusal fallback is off by default: with it on, a declined request is answered by another model,
-and the fs2f results show that the answering model matters. Turn it on with ``fallback=True``; the record
-then names the model that served the answer.
+Server-side refusal fallback is off by default: with it on, a declined request is answered by another model.
+Turn it on with ``fallback=True``; the record then names the model that served the answer. Batches cannot use it.
 """
 
 from __future__ import annotations
@@ -14,8 +13,9 @@ from __future__ import annotations
 from typing import Any
 
 import anthropic
+from anthropic.types.messages import MessageBatchSucceededResult
 
-from seqfun_annotator.providers.base import ProviderError
+from seqfun_annotator.providers.base import BatchStatus, ProviderError
 from seqfun_annotator.schema import Completion, Usage
 
 DEFAULT_MAX_TOKENS = 64_000
@@ -23,7 +23,7 @@ FALLBACK_BETA = "server-side-fallback-2026-07-01"
 
 
 def request_params(prompt: str, model: str, effort: str, max_tokens: int = DEFAULT_MAX_TOKENS) -> dict[str, Any]:
-    """The Messages API parameters for one question (also used for batch requests).
+    """The Messages API parameters for one question.
 
     >>> p = request_params("hi", "claude-opus-5-5", "high")
     >>> p["thinking"], p["output_config"], p["messages"]
@@ -59,6 +59,7 @@ def completion_from_message(message: Any) -> Completion:
         served_model=message.model,
         stop_reason=stop,
         fallback_used=any(getattr(i, "type", None) == "fallback_message" for i in iterations),
+        response_id=getattr(message, "id", None),
     )
 
 
@@ -76,6 +77,17 @@ class AnthropicProvider:
         self.max_tokens = max_tokens
         self.fallback = fallback
 
+    @property
+    def client_version(self) -> str:
+        return f"anthropic-python {anthropic.__version__}"
+
+    def request_options(self, model: str, effort: str) -> dict[str, Any]:
+        params = request_params("", model, effort, self.max_tokens)
+        del params["messages"], params["model"]
+        if self.fallback:
+            params["fallbacks"] = "default"
+        return params
+
     def complete(self, prompt: str, model: str, effort: str) -> Completion:
         params = request_params(prompt, model, effort, self.max_tokens)
         try:
@@ -88,3 +100,35 @@ class AnthropicProvider:
         except anthropic.APIError as e:
             raise ProviderError(f"{type(e).__name__}: {e}") from e
         return completion_from_message(message)
+
+    def count_tokens(self, prompt: str, model: str) -> int:
+        try:
+            r = self.client.messages.count_tokens(model=model, messages=[{"role": "user", "content": prompt}])
+        except anthropic.APIError as e:
+            raise ProviderError(f"{type(e).__name__}: {e}") from e
+        return int(r.input_tokens)
+
+    def submit_batch(self, items: list[tuple[str, str]], model: str, effort: str) -> str:
+        requests: list[Any] = [
+            {"custom_id": cid, "params": request_params(prompt, model, effort, self.max_tokens)}
+            for cid, prompt in items
+        ]
+        return str(self.client.messages.batches.create(requests=requests).id)
+
+    def batch_status(self, batch_id: str) -> BatchStatus:
+        b = self.client.messages.batches.retrieve(batch_id)
+        c = b.request_counts
+        counts = {k: getattr(c, k) for k in ("processing", "succeeded", "errored", "canceled", "expired")}
+        return BatchStatus(
+            batch_id=batch_id, state=b.processing_status, done=b.processing_status == "ended", counts=counts
+        )
+
+    def batch_results(self, batch_id: str, custom_ids: list[str]) -> dict[str, Completion | str]:
+        out: dict[str, Completion | str] = {}
+        for result in self.client.messages.batches.results(batch_id):
+            r = result.result
+            if isinstance(r, MessageBatchSucceededResult):
+                out[result.custom_id] = completion_from_message(r.message)
+            else:
+                out[result.custom_id] = f"batch result {r.type}"
+        return out

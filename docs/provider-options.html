@@ -109,7 +109,15 @@ footer { font-size: 0.88rem; color: var(--muted); max-width: 48rem; display: gri
   </header>
 
   <div class="verdict">
-    <h2>Recommendation</h2>
+    <h2>Decision, 25 November 2026</h2>
+    <p><strong>Direct clients for every provider.</strong> If calling close to the metal is best for Anthropic, it is best for all. seqfun keeps its own thin clients for Anthropic (Messages API), Gemini (generateContent) and OpenAI (Responses API). Each sends exactly the protocol, records the same provenance and passes the same input-token check. All three have batch support through their providers' batch APIs. Agents write and maintain this code, so the convenience of a wrapper does not decide it. llm is not used as the provider layer; llm templates for one-off reads are optional and low priority.</p>
+    <p><strong>Logging and caching.</strong> Every call is logged with full provenance in a local SQLite store, which is also the cache. The cache key is a set of fields, by default the sequence MD5 (as UniParc uses), task, prompt version, provider, model and effort, so a renamed sequence still hits and a changed prompt never does.</p>
+    <p><strong>Built to merge.</strong> Records are keyed by sequence checksum and call id, exports from different people merge without duplicates, and the annotated sequences can be written as FASTA for a DIAMOND or BLAST database. A shared, searchable database is designed (<code>docs/shared-database.md</code>), not built.</p>
+    <p><strong>PFA.</strong> The host runs seqfun for the blind read and hands the JSON to the reviewer. PFA's merged prompt is now seqfun's <code>combined</code> task, marked untested.</p>
+  </div>
+
+  <div class="verdict" style="background: var(--surface); border-left-color: var(--rule)">
+    <h2>Recommendation given before the decision</h2>
     <p><strong>Every read goes as a direct, single-shot API call: the prompt and the sequence, and nothing else.</strong> That clean route is a core reason seqfun exists. fs2f's main Claude runs went through the Claude Code command line, which cannot rule out extra context or connector tools. Those runs should be treated as possibly contaminated, and seqfun is the tooling for repeating and extending them.</p>
     <p><strong>For Anthropic models, call the Messages API through the <code>anthropic</code> client ourselves (A). For every other provider, use llm as an optional extra (B).</strong> A gives exact control of every field in the request and shares one request builder with the half-price batch path. It also has fewer moving parts: one HTTP client, no plugins, no per-user llm settings. B gives uniform access to Gemini, OpenAI and any other plugin model without client code of ours. Ship the four prompts as llm templates as well, for one-off reads. Drop the hand-written Gemini and OpenAI clients. Don't use litellm.</p>
     <p><strong>For PFA:</strong> run the sequence read through seqfun on the host and hand the JSON to the reviewer, instead of running a tool-free managed-agent session for it.</p>

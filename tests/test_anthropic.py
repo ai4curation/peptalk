@@ -3,6 +3,7 @@ from types import SimpleNamespace as NS
 import anthropic
 import httpx2
 import pytest
+from anthropic.types.messages import MessageBatchSucceededResult
 
 from seqfun_annotator.providers import ProviderError
 from seqfun_annotator.providers.anthropic import FALLBACK_BETA, AnthropicProvider
@@ -84,3 +85,52 @@ def test_api_error_becomes_provider_error():
     err = anthropic.APIConnectionError(request=httpx2.Request("POST", "https://api.anthropic.com/v1/messages"))
     with pytest.raises(ProviderError, match="APIConnectionError"):
         AnthropicProvider(client=client(error=err)).complete("P", "m", "high")
+
+
+class FakeBatches:
+    def __init__(self, results):
+        self.results_list, self.created = results, None
+
+    def create(self, requests):
+        self.created = requests
+        return NS(id="msgbatch_1")
+
+    def retrieve(self, batch_id):
+        counts = NS(processing=0, succeeded=1, errored=1, canceled=0, expired=0)
+        return NS(id=batch_id, processing_status="ended", request_counts=counts)
+
+    def results(self, batch_id):
+        return self.results_list
+
+
+def test_count_tokens_and_options():
+    c = client(message())
+    c.messages.count_tokens = lambda model, messages: NS(input_tokens=829)
+    p = AnthropicProvider(client=c)
+    assert p.count_tokens("P", "claude-fable-5-2") == 829
+    assert p.request_options("claude-fable-5-2", "high") == {
+        "max_tokens": 64000,
+        "thinking": {"type": "adaptive"},
+        "output_config": {"effort": "high"},
+    }
+    assert p.client_version.startswith("anthropic-python ")
+
+
+def test_batch_round_trip():
+    batches = FakeBatches(
+        [
+            NS(
+                custom_id="a",
+                result=MessageBatchSucceededResult.model_construct(type="succeeded", message=message('{"x": 1}')),
+            ),
+            NS(custom_id="b", result=NS(type="errored")),
+        ]
+    )
+    c = client()
+    c.messages.batches = batches
+    p = AnthropicProvider(client=c)
+    assert p.submit_batch([("a", "PA"), ("b", "PB")], "claude-opus-5-5", "high") == "msgbatch_1"
+    assert batches.created[0]["params"]["messages"][0]["content"] == "PA"
+    assert p.batch_status("msgbatch_1").done
+    out = p.batch_results("msgbatch_1", ["a", "b"])
+    assert out["a"].text == '{"x": 1}' and out["b"] == "batch result errored"

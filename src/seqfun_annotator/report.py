@@ -1,8 +1,9 @@
 """Reading and writing annotation records, and short summaries of them.
 
 >>> from seqfun_annotator.schema import Annotation
->>> a = Annotation(id="p1", task="features", sequence_length=300, sequence_sha256="x", provider="stub",
-...     model="m", effort="high", prompt_sha256="y", asked_at="t", confidence="checks_passed",
+>>> a = Annotation(uid="u1", id="p1", task="features", sequence="M" * 300, seq_md5="x", sequence_length=300,
+...     provider="stub", model="m", effort="high", prompt_version="v", prompt_sha256="y", started_at="t",
+...     confidence="checks_passed",
 ...     answer={"protein_name": "Kinase", "pfam_domains": [{"accession": "PF00069", "start": 5, "end": 260}]})
 >>> headline(a)
 'PF00069:5-260'
@@ -18,7 +19,7 @@ from pathlib import Path
 
 from seqfun_annotator.schema import Annotation
 
-SUMMARY_COLUMNS = ["id", "task", "condition", "confidence", "protein_name", "call", "flags", "cost_usd", "cached"]
+SUMMARY_COLUMNS = ["id", "task", "condition", "confidence", "protein_name", "call", "flags", "cost_usd", "reused"]
 
 
 def write_jsonl(annotations: Iterable[Annotation], fh: io.TextIOBase) -> None:
@@ -55,6 +56,12 @@ def headline(a: Annotation) -> str:
         return f"active={x.get('catalytically_active')}" + (f" lost {','.join(subs)}" if subs else "")
     if a.task == "structure":
         return f"{x.get('fold')}; {len(x.get('helices') or [])}H {len(x.get('strands') or [])}E"
+    if a.task == "combined":
+        combined = ";".join(
+            f"{d.get('accession') or d.get('name')}:{d.get('start')}-{d.get('end')}"
+            for d in x.get("pfam_domains") or []
+        )
+        return f"{combined} active={x.get('catalytically_active')}".strip()
     if a.task == "function":
         return ",".join(t.get("id") or t.get("label") or "" for t in x.get("molecular_function") or []) or (
             x.get("summary") or ""
@@ -80,7 +87,7 @@ def summary_rows(annotations: Iterable[Annotation]) -> list[dict[str, str]]:
                 "call": headline(a),
                 "flags": " | ".join(flags),
                 "cost_usd": "" if a.cost_usd is None else f"{a.cost_usd:.4f}",
-                "cached": "yes" if a.cached else "",
+                "reused": "yes" if a.cached else "",
             }
         )
     return rows
@@ -93,7 +100,7 @@ def write_tsv(annotations: Iterable[Annotation], fh: io.TextIOBase) -> None:
 
 
 def totals(annotations: list[Annotation]) -> dict[str, float | int | None]:
-    """Counts, tokens and the dollars spent by this run (cached answers cost nothing again).
+    """Counts, tokens and the dollars spent by this run (reused answers cost nothing again).
 
     >>> totals([])["calls"]
     0
@@ -103,7 +110,7 @@ def totals(annotations: list[Annotation]) -> dict[str, float | int | None]:
     return {
         "answers": len(annotations),
         "calls": len(fresh),
-        "cached": sum(a.cached for a in annotations),
+        "reused": sum(a.cached for a in annotations),
         "errors": sum(a.error is not None for a in annotations),
         "flagged": sum(a.confidence == "flagged" for a in annotations),
         "input_tokens": sum(a.usage.input_tokens for a in fresh),
@@ -116,7 +123,7 @@ def totals_line(annotations: list[Annotation]) -> str:
     t = totals(annotations)
     spent = "unknown (no price for this model)" if t["cost_usd"] is None else f"${t['cost_usd']:.4f}"
     return (
-        f"{t['answers']} answers ({t['calls']} new calls, {t['cached']} cached, {t['errors']} errors, "
+        f"{t['answers']} answers ({t['calls']} new calls, {t['reused']} reused, {t['errors']} errors, "
         f"{t['flagged']} flagged); {t['input_tokens']} input + {t['output_tokens']} output tokens; spent {spent}"
     )
 

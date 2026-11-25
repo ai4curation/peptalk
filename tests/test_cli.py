@@ -1,5 +1,6 @@
 import json
 
+import pytest
 from conftest import DATA
 from typer.testing import CliRunner
 
@@ -16,72 +17,63 @@ def run(*args, input=None):
     return result
 
 
+@pytest.fixture
+def db(tmp_path):
+    return str(tmp_path / "seqfun.db")
+
+
+def stub(*args, db, input=None):
+    return run(*args, "--provider", "stub", "-m", "stub", "--db", db, input=input)
+
+
 def test_version():
     assert run("--version").stdout.strip() == __version__
 
 
 def test_tasks():
     out = run("tasks").stdout
-    assert "features\tfs2f FEAT" in out and "function\tnew" in out
+    assert "features\tb03b98845ad2\tfs2f FEAT" in out and "combined\t" in out
     assert run("tasks", "--show", "active-site").stdout.strip().endswith(">sequence\n<sequence>")
 
 
-def test_annotate_stub_jsonl(tmp_path):
+def test_annotate_log_export_import_fasta(tmp_path, db):
     out = tmp_path / "out.jsonl"
-    run(
-        "annotate",
-        FASTA,
-        "--provider",
-        "stub",
-        "-m",
-        "stub",
-        "-t",
-        "features",
-        "-t",
-        "active-site",
-        "--shuffle-control",
-        "--no-cache",
-        "-o",
-        str(out),
-    )
+    stub("annotate", FASTA, "-t", "features", "-t", "combined", "--shuffle-control", "-o", str(out), db=db)
     rows = [json.loads(line) for line in out.read_text().splitlines()]
-    assert len(rows) == 3 * 2 * 2
-    assert {r["condition"] for r in rows} == {"real", "shuffled"}
+    assert len(rows) == 3 * 2 * 2 and {r["condition"] for r in rows} == {"real", "shuffled"}
+    assert all(r["seq_md5"] and r["sequence"] and r["uid"] for r in rows)
+
     summary = run("summarize", str(out))
     assert summary.stdout.splitlines()[0].startswith("id\ttask\tcondition\tconfidence")
     assert "12 answers" in summary.stderr
 
+    log = run("log", "--db", db, "--limit", "3").stdout.splitlines()
+    assert log[0].startswith("started_at\tid\ttask") and len(log) == 4
+    counted = run("log", "--db", db, "--sql", "SELECT count(*) AS n FROM calls WHERE condition = 'real'").stdout
+    assert counted.splitlines() == ["n", "6"]
 
-def test_annotate_stdin_tsv(tmp_path):
-    result = run(
-        "annotate",
-        "-",
-        "--provider",
-        "stub",
-        "-m",
-        "stub",
-        "-f",
-        "tsv",
-        "--cache-dir",
-        str(tmp_path),
-        "-q",
-        input=">x\nMKTAYIAKQR\n",
-    )
-    assert result.stdout.splitlines()[1].startswith("x\tfeatures\treal\tchecks_passed")
-    again = run(
-        "annotate",
-        "-",
-        "--provider",
-        "stub",
-        "-m",
-        "stub",
-        "-f",
-        "tsv",
-        "--cache-dir",
-        str(tmp_path),
-        input=">x\nMKTAYIAKQR\n",
-    )
-    assert "1 cached" in again.stderr
+    export = tmp_path / "export.jsonl"
+    run("export", "--db", db, "-o", str(export))
+    other = str(tmp_path / "other.db")
+    assert "12 added, 0 already present" in run("import", str(export), "--db", other).stderr
+    assert "0 added, 12 already present" in run("import", str(export), "--db", other).stderr
+
+    fasta = run("fasta", "--db", other).stdout
+    assert fasta.count(">") == 3 and "tasks=combined,features" in fasta
+
+
+def test_reuse_from_store(db):
+    first = stub("annotate", "-", "-f", "tsv", "-q", db=db, input=">x\nMKTAYIAKQR\n")
+    assert first.stdout.splitlines()[1].startswith("x\tfeatures\treal\tchecks_passed")
+    again = stub("annotate", "-", "-f", "tsv", db=db, input=">y\nMKTAYIAKQR\n")
+    assert "1 reused" in again.stderr and again.stdout.splitlines()[1].startswith("y\t")
+    fresh = stub("annotate", "-", "--no-reuse", db=db, input=">x\nMKTAYIAKQR\n")
+    assert "1 new calls" in fresh.stderr
+
+
+def test_bad_cache_key(db):
+    result = runner.invoke(app, ["annotate", FASTA, "--provider", "stub", "--db", db, "--cache-key", "task,colour"])
+    assert result.exit_code != 0
 
 
 def test_shuffle():
@@ -89,23 +81,30 @@ def test_shuffle():
     assert out.count(">") == 3 and ">A0ABQ0J1P6 shuffled" in out
 
 
-def test_unknown_task():
-    result = runner.invoke(app, ["annotate", FASTA, "-t", "nope", "--provider", "stub"])
+def test_unknown_task(db):
+    result = runner.invoke(app, ["annotate", FASTA, "-t", "nope", "--provider", "stub", "--db", db])
     assert result.exit_code != 0
 
 
-def test_batch_submit_skips_cached(tmp_path, monkeypatch):
-    from seqfun_annotator import batch
+def test_batch_cycle(tmp_path, db, monkeypatch):
+    from seqfun_annotator.providers.stub import StubProvider
 
-    seen = {}
-
-    def fake_submit(m):
-        seen["n"] = len(m.entries)
-        m.batch_id = "msgbatch_x"
-        return m
-
-    monkeypatch.setattr(batch, "submit", fake_submit)
-    cache = str(tmp_path / "c")
+    shared = StubProvider()  # one instance, so the batch it holds survives between commands
+    monkeypatch.setattr("seqfun_annotator.cli._provider", lambda *a, **k: shared)
     manifest = tmp_path / "m.json"
-    run("batch", "submit", FASTA, "--manifest", str(manifest), "--cache-dir", cache, "-m", "claude-haiku-5-5")
-    assert seen["n"] == 3 and json.loads(manifest.read_text())["batch_id"] == "msgbatch_x"
+    run("batch", "submit", FASTA, "--manifest", str(manifest), "--db", db, "-m", "stub")
+    assert len(json.loads(manifest.read_text())["entries"]) == 3
+    assert "\tdone\t" in run("batch", "status", str(manifest)).stdout
+    out = run("batch", "collect", str(manifest), "--db", db, "-f", "tsv")
+    assert out.stdout.count("checks_passed") == 3
+    again = runner.invoke(app, ["batch", "submit", FASTA, "--manifest", str(manifest), "--db", db, "-m", "stub"])
+    assert "nothing to submit" in again.stderr
+
+
+def test_missing_extra_is_explained(monkeypatch, db):
+    import importlib.util
+
+    real = importlib.util.find_spec
+    monkeypatch.setattr(importlib.util, "find_spec", lambda n, *a: None if n == "google" else real(n, *a))
+    result = runner.invoke(app, ["annotate", FASTA, "-m", "gemini-4-neon", "--db", db])
+    assert result.exit_code != 0 and "seqfun-annotator[gemini]" in result.output

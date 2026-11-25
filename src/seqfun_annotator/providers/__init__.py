@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+import importlib.util
 from typing import Any
 
 from seqfun_annotator.providers.base import Provider, ProviderError
@@ -24,8 +25,19 @@ def provider_for_model(model: str) -> str:
     return "anthropic"
 
 
+EXTRAS = {"gemini": "google.genai", "openai": "openai"}
+
+
+def require_extra(name: str) -> None:
+    """Raise a clear ImportError when a provider's SDK (an optional extra) is not installed."""
+    module = EXTRAS.get(name)
+    if module and importlib.util.find_spec(module.split(".")[0]) is None:
+        raise ImportError(f"the {name} provider needs its SDK: pip install 'seqfun-annotator[{name}]'")
+
+
 def get_provider(name: str, **options: Any) -> Provider:
     """Build a provider by name. Gemini and OpenAI need the ``gemini`` / ``openai`` extras installed."""
+    require_extra(name)
     if name == "anthropic":
         from seqfun_annotator.providers.anthropic import AnthropicProvider
 
@@ -45,4 +57,4 @@ def get_provider(name: str, **options: Any) -> Provider:
     raise ValueError(f"unknown provider {name!r}; choose from {', '.join(PROVIDERS)}")
 
 
-__all__ = ["PROVIDERS", "Provider", "ProviderError", "get_provider", "provider_for_model"]
+__all__ = ["PROVIDERS", "Provider", "ProviderError", "get_provider", "provider_for_model", "require_extra"]

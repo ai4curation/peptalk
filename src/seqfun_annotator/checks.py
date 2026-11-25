@@ -22,9 +22,11 @@ from pydantic import BaseModel
 from seqfun_annotator.schema import (
     ActiveSiteAnswer,
     Check,
+    CombinedAnswer,
     FeaturesAnswer,
     FunctionAnswer,
     StructureAnswer,
+    Usage,
 )
 
 PFAM_ACCESSION = re.compile(r"^PF\d{5}(\.\d+)?$")
@@ -70,10 +72,33 @@ def _identifiers(ids: Iterable[str | None], pattern: re.Pattern[str], label: str
     return Check(name=label, passed=not bad, detail="; ".join(bad))
 
 
+def input_check(usage: Usage, expected: int) -> Check:
+    """The call's reported input tokens equal the provider's count of the prompt alone.
+
+    A larger count means something besides the prompt was sent (a system prompt, tools, attached context).
+
+    >>> input_check(Usage(input_tokens=829), 829).passed
+    True
+    >>> input_check(Usage(input_tokens=800, cache_read_input_tokens=5900), 829).detail
+    'reported 6700 input tokens, prompt alone is 829'
+    """
+    reported = usage.input_tokens + usage.cache_read_input_tokens + usage.cache_creation_input_tokens
+    ok = reported == expected
+    return Check(
+        name="input_tokens_match",
+        passed=ok,
+        detail="" if ok else f"reported {reported} input tokens, prompt alone is {expected}",
+    )
+
+
 def check_answer(task: str, answer: BaseModel, seq: str) -> list[Check]:
     """Checks of one answer against its own sequence. Only checks that apply to the answer are returned."""
     n = len(seq)
     checks: list[Check] = []
+    if isinstance(answer, CombinedAnswer):
+        checks.extend(check_answer("features", FeaturesAnswer.model_validate(answer.model_dump()), seq))
+        checks.extend(check_answer("active-site", ActiveSiteAnswer.model_validate(answer.model_dump()), seq))
+        return checks
     if isinstance(answer, FeaturesAnswer):
         if answer.pfam_domains:
             checks.append(
@@ -113,6 +138,14 @@ def control_signal(answer: BaseModel) -> str | None:
     >>> control_signal(ActiveSiteAnswer(catalytically_active="no")) is None
     True
     """
+    if isinstance(answer, CombinedAnswer):
+        parts = [
+            control_signal(FeaturesAnswer.model_validate(answer.model_dump())),
+            control_signal(ActiveSiteAnswer.model_validate(answer.model_dump())),
+            f"recognised as {answer.protein_name or 'a known protein'}" if answer.recognised else None,
+        ]
+        found = [p for p in parts if p]
+        return "; ".join(found) if found else None
     if isinstance(answer, FeaturesAnswer) and answer.pfam_domains:
         return "domains " + ", ".join(d.accession or d.name or "?" for d in answer.pfam_domains)
     if isinstance(answer, ActiveSiteAnswer) and answer.catalytically_active == "yes":

@@ -5,28 +5,31 @@ from __future__ import annotations
 import sys
 from enum import Enum
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Any
 
 import typer
 
 from seqfun_annotator import __version__
-from seqfun_annotator.annotator import Annotator, build_questions
-from seqfun_annotator.cache import Cache, default_cache_dir
+from seqfun_annotator.annotator import Annotator, build_questions, new_annotation
+from seqfun_annotator.exchange import annotated_fasta, export_records, import_jsonl
 from seqfun_annotator.fasta import SequenceRecord, format_fasta, parse_fasta, shuffle_sequence
 from seqfun_annotator.pricing import load_prices
 from seqfun_annotator.providers import PROVIDERS, get_provider, provider_for_model
+from seqfun_annotator.providers.base import Provider
 from seqfun_annotator.report import dumps_json, read_jsonl, totals_line, write_jsonl, write_tsv
 from seqfun_annotator.schema import Annotation
+from seqfun_annotator.store import DEFAULT_KEY, KEY_FIELDS, Store, default_db_path
 from seqfun_annotator.tasks import TASKS
 
 app = typer.Typer(
     help="Annotate protein sequences with a frontier language model, from sequence alone.", no_args_is_help=True
 )
-batch_app = typer.Typer(help="Anthropic Message Batches: half price, results within 24 hours.", no_args_is_help=True)
+batch_app = typer.Typer(help="Provider batch APIs: half price, results within 24 hours.", no_args_is_help=True)
 app.add_typer(batch_app, name="batch")
 
 DEFAULT_MODEL = "claude-fable-5-2"
 DEFAULT_EFFORT = "high"
+DEFAULT_KEY_TEXT = ",".join(DEFAULT_KEY)
 
 
 class Format(str, Enum):
@@ -37,19 +40,37 @@ class Format(str, Enum):
 
 FastaArg = Annotated[Path, typer.Argument(help="FASTA file, or - for standard input.", allow_dash=True)]
 TaskOpt = Annotated[
-    list[str], typer.Option("--task", "-t", help=f"Task to run; repeatable. One of: {', '.join(TASKS)}.")
+    list[str] | None,
+    typer.Option("--task", "-t", help=f"Task to run; repeatable. One of: {', '.join(TASKS)} [default: features]."),
 ]
-ModelOpt = Annotated[str, typer.Option("--model", "-m", help="Model id.")]
+ModelOpt = Annotated[str, typer.Option("--model", "-m", help="Model id, as the provider names it.")]
 EffortOpt = Annotated[str, typer.Option("--effort", "-e", help="Effort / thinking level (provider's own labels).")]
+ProviderOpt = Annotated[str | None, typer.Option(help=f"One of {', '.join(PROVIDERS)} [default: from the model name].")]
 ShuffleOpt = Annotated[
     bool, typer.Option("--shuffle-control/--no-shuffle-control", help="Also ask each task of a shuffled copy.")
 ]
-CacheDirOpt = Annotated[Path | None, typer.Option(help="Cache directory [default: ~/.cache/seqfun-annotator].")]
+DbOpt = Annotated[
+    Path | None,
+    typer.Option("--db", help="SQLite log and cache [default: ~/.local/share/seqfun-annotator/seqfun.db]."),
+]
+ReuseOpt = Annotated[bool, typer.Option("--reuse/--no-reuse", help="Reuse a stored answer instead of asking again.")]
+KeyOpt = Annotated[
+    str,
+    typer.Option(help=f"Comma-separated fields a stored answer must match to be reused; from {', '.join(KEY_FIELDS)}."),
+]
+VerifyOpt = Annotated[
+    bool,
+    typer.Option(
+        "--verify-input/--no-verify-input",
+        help="Count each prompt's tokens first and check the call sent nothing else.",
+    ),
+]
 PricesOpt = Annotated[Path | None, typer.Option(help="JSON file of extra prices per model ($ per million tokens).")]
 OutOpt = Annotated[Path | None, typer.Option("--output", "-o", help="Write here instead of standard output.")]
 FormatOpt = Annotated[
     Format, typer.Option("--format", "-f", help="jsonl: one full record per line; tsv: a summary table.")
 ]
+MaxTokensOpt = Annotated[int, typer.Option(help="Anthropic only: output limit per answer, thinking included.")]
 
 
 def _read_records(fasta: Path) -> list[SequenceRecord]:
@@ -63,6 +84,22 @@ def _check_tasks(tasks: list[str] | None) -> list[str]:
     if bad:
         raise typer.BadParameter(f"unknown task(s) {', '.join(bad)}; choose from {', '.join(TASKS)}")
     return tasks
+
+
+def _store(db: Path | None, key: str = DEFAULT_KEY_TEXT) -> Store:
+    try:
+        return Store(db or default_db_path(), key=[f.strip() for f in key.split(",") if f.strip()])
+    except ValueError as e:
+        raise typer.BadParameter(str(e)) from e
+
+
+def _provider(name: str | None, model: str, fallback: bool = False, max_tokens: int = 64_000) -> Provider:
+    name = name or provider_for_model(model)
+    options: dict[str, Any] = {"fallback": fallback, "max_tokens": max_tokens} if name == "anthropic" else {}
+    try:
+        return get_provider(name, **options)
+    except (ImportError, ValueError) as e:
+        raise typer.BadParameter(str(e)) from e
 
 
 def _write(annotations: list[Annotation], fmt: Format, output: Path | None) -> None:
@@ -98,41 +135,40 @@ def annotate(
     task: TaskOpt = None,
     model: ModelOpt = DEFAULT_MODEL,
     effort: EffortOpt = DEFAULT_EFFORT,
-    provider: Annotated[
-        str | None, typer.Option(help=f"One of {', '.join(PROVIDERS)} [default: from the model name].")
-    ] = None,
+    provider: ProviderOpt = None,
     shuffle_control: ShuffleOpt = False,
     output: OutOpt = None,
     fmt: FormatOpt = Format.jsonl,
-    cache: Annotated[bool, typer.Option("--cache/--no-cache", help="Reuse and store answers in the cache.")] = True,
-    cache_dir: CacheDirOpt = None,
+    db: DbOpt = None,
+    log: Annotated[bool, typer.Option("--log/--no-log", help="Log calls in the store (and reuse from it).")] = True,
+    reuse: ReuseOpt = True,
+    cache_key: KeyOpt = DEFAULT_KEY_TEXT,
+    verify_input: VerifyOpt = True,
     prices: PricesOpt = None,
     concurrency: Annotated[int, typer.Option(help="Questions asked at once.")] = 4,
     fallback: Annotated[
         bool, typer.Option(help="Anthropic only: let another model answer a declined request.")
     ] = False,
-    max_tokens: Annotated[
-        int, typer.Option(help="Anthropic only: output limit per answer, thinking included.")
-    ] = 64_000,
+    max_tokens: MaxTokensOpt = 64_000,
     quiet: Annotated[bool, typer.Option("--quiet", "-q", help="No progress or totals on standard error.")] = False,
 ) -> None:
     """Annotate every sequence in a FASTA file. Each sequence is sent alone, headed '>sequence'."""
     records = _read_records(fasta)
     tasks = _check_tasks(task)
-    name = provider or provider_for_model(model)
-    options = {"fallback": fallback, "max_tokens": max_tokens} if name == "anthropic" else {}
     annotator = Annotator(
-        get_provider(name, **options),
+        _provider(provider, model, fallback, max_tokens),
         model=model,
         effort=effort,
-        cache=Cache(cache_dir or default_cache_dir()) if cache else None,
+        store=_store(db, cache_key) if log else None,
         prices=load_prices(prices) if prices else None,
         concurrency=concurrency,
+        verify_input=verify_input,
+        reuse=reuse,
     )
 
     def progress(a: Annotation) -> None:
         if not quiet:
-            how = "cached" if a.cached else (a.error or a.confidence)
+            how = "reused" if a.cached else (a.error or a.confidence)
             typer.echo(f"{a.id}\t{a.task}\t{a.condition}\t{how}", err=True)
 
     annotations = annotator.annotate(records, tasks, shuffle_control=shuffle_control, progress=progress)
@@ -143,7 +179,7 @@ def annotate(
 
 @app.command()
 def summarize(
-    results: Annotated[Path, typer.Argument(help="JSONL file written by 'seqfun annotate' or 'seqfun batch collect'.")],
+    results: Annotated[Path, typer.Argument(help="JSONL file written by 'annotate', 'batch collect' or 'export'.")],
     output: OutOpt = None,
 ) -> None:
     """Print a summary table (TSV) of saved results, and their totals on standard error."""
@@ -152,16 +188,71 @@ def summarize(
     typer.echo(totals_line(annotations), err=True)
 
 
+LOG_SQL = (
+    "SELECT started_at, id, task, condition, provider, model, served_model, effort, confidence, input_tokens, "
+    "output_tokens, thinking_tokens, round(cost_usd, 4) AS cost_usd, batch, error FROM calls "
+    "ORDER BY started_at DESC LIMIT ?"
+)
+
+
+@app.command("log")
+def show_log(
+    db: DbOpt = None,
+    sql: Annotated[str | None, typer.Option(help="Run this SQL on the 'calls' table instead (read-only).")] = None,
+    limit: Annotated[int, typer.Option(help="Most recent calls to list.")] = 20,
+) -> None:
+    """List logged calls (TSV), or run a read-only SQL query on the log."""
+    store = _store(db)
+    cols, rows = store.query(sql) if sql else store.query(LOG_SQL, [limit])
+    typer.echo("\t".join(cols))
+    for row in rows:
+        typer.echo("\t".join("" if v is None else str(v) for v in row))
+
+
+@app.command("export")
+def export_cmd(
+    db: DbOpt = None,
+    output: OutOpt = None,
+    real_only: Annotated[bool, typer.Option(help="Leave out the shuffled controls.")] = False,
+) -> None:
+    """Write every logged call as JSONL, ready to merge with other people's exports."""
+    records = export_records(_store(db), real_only=real_only)
+    _write(records, Format.jsonl, output)
+    typer.echo(f"{len(records)} records", err=True)
+
+
+@app.command("import")
+def import_cmd(
+    files: Annotated[list[Path], typer.Argument(help="JSONL exports to add.")],
+    db: DbOpt = None,
+) -> None:
+    """Add exported records to the store, skipping any already present (same call uid)."""
+    store = _store(db)
+    for f in files:
+        added, present = import_jsonl(store, f)
+        typer.echo(f"{f}: {added} added, {present} already present", err=True)
+
+
+@app.command("fasta")
+def fasta_cmd(db: DbOpt = None, output: OutOpt = None) -> None:
+    """Write each annotated sequence once, named by its MD5, for building a DIAMOND or BLAST database."""
+    text = annotated_fasta(_store(db).records("condition = 'real'"))
+    if output:
+        output.write_text(text)
+    else:
+        typer.echo(text, nl=False)
+
+
 @app.command()
 def tasks(
     show: Annotated[str | None, typer.Option(help="Print the full prompt of this task.")] = None,
 ) -> None:
-    """List the tasks, or print one task's prompt."""
+    """List the tasks (name, prompt version, source, summary), or print one task's prompt."""
     if show:
         typer.echo(TASKS[_check_tasks([show])[0]].prompt_for("<sequence>"))
         return
     for t in TASKS.values():
-        typer.echo(f"{t.name}\t{t.source}\t{t.summary}")
+        typer.echo(f"{t.name}\t{t.version}\t{t.source}\t{t.summary}")
 
 
 @app.command()
@@ -185,34 +276,41 @@ def batch_submit(
     task: TaskOpt = None,
     model: ModelOpt = DEFAULT_MODEL,
     effort: EffortOpt = DEFAULT_EFFORT,
+    provider: ProviderOpt = None,
     shuffle_control: ShuffleOpt = False,
-    cache: Annotated[bool, typer.Option("--cache/--no-cache", help="Leave out questions already in the cache.")] = True,
-    cache_dir: CacheDirOpt = None,
-    max_tokens: Annotated[int, typer.Option(help="Output limit per answer, thinking included.")] = 64_000,
+    db: DbOpt = None,
+    reuse: Annotated[bool, typer.Option("--reuse/--no-reuse", help="Leave out questions with a stored answer.")] = True,
+    cache_key: KeyOpt = DEFAULT_KEY_TEXT,
+    verify_input: VerifyOpt = True,
+    max_tokens: MaxTokensOpt = 64_000,
 ) -> None:
-    """Submit every question as one Anthropic message batch."""
-    from seqfun_annotator.batch import build_manifest, submit
+    """Submit every question as one batch to the model's provider."""
+    from seqfun_annotator import batch
 
+    p = _provider(provider, model, max_tokens=max_tokens)
     questions = build_questions(_read_records(fasta), _check_tasks(task), shuffle_control)
-    if cache:
-        store = Cache(cache_dir or default_cache_dir())
-        questions = [q for q in questions if store.get("anthropic", model, effort, q.prompt) is None]
+    if reuse:
+        store = _store(db, cache_key)
+        questions = [q for q in questions if store.lookup(new_annotation(q, p, model, effort)) is None]
     if not questions:
-        typer.echo("Every question is already in the cache; nothing to submit.", err=True)
+        typer.echo("Every question already has a stored answer; nothing to submit.", err=True)
         raise typer.Exit()
-    m = submit(build_manifest(questions, model, effort, max_tokens))
+    m = batch.submit(p, questions, model, effort, verify_input=verify_input)
     m.save(manifest)
-    typer.echo(f"Submitted batch {m.batch_id} with {len(m.entries)} questions; manifest in {manifest}", err=True)
+    typer.echo(
+        f"Submitted {m.provider} batch {m.batch_id} with {len(m.entries)} questions; manifest in {manifest}", err=True
+    )
 
 
 @batch_app.command("status")
 def batch_status(manifest: Annotated[Path, typer.Argument(help="Manifest written by 'batch submit'.")]) -> None:
-    """Show a batch's processing status and counts."""
-    from seqfun_annotator.batch import BatchManifest, status
+    """Show a batch's state and counts."""
+    from seqfun_annotator.batch import BatchManifest
 
-    b = status(BatchManifest.load(manifest))
-    c = b.request_counts
-    typer.echo(f"{b.id}\t{b.processing_status}\tprocessing={c.processing} succeeded={c.succeeded} errored={c.errored}")
+    m = BatchManifest.load(manifest)
+    s = _provider(m.provider, m.model).batch_status(m.batch_id)
+    counts = " ".join(f"{k}={v}" for k, v in s.counts.items())
+    typer.echo(f"{s.batch_id}\t{s.state}\t{'done' if s.done else 'running'}\t{counts}")
 
 
 @batch_app.command("collect")
@@ -220,20 +318,19 @@ def batch_collect(
     manifest: Annotated[Path, typer.Argument(help="Manifest written by 'batch submit'.")],
     output: OutOpt = None,
     fmt: FormatOpt = Format.jsonl,
-    cache_dir: CacheDirOpt = None,
+    db: DbOpt = None,
     prices: PricesOpt = None,
 ) -> None:
-    """Read an ended batch's results, store them in the cache, and write annotation records."""
-    from seqfun_annotator.batch import BatchManifest, collect, status
+    """Read a finished batch's results, log them in the store, and write annotation records."""
+    from seqfun_annotator.batch import BatchManifest, collect
 
     m = BatchManifest.load(manifest)
-    b = status(m)
-    if b.processing_status != "ended":
-        typer.echo(f"Batch {m.batch_id} is {b.processing_status}; collect it once it has ended.", err=True)
+    p = _provider(m.provider, m.model)
+    s = p.batch_status(m.batch_id)
+    if not s.done:
+        typer.echo(f"Batch {m.batch_id} is {s.state}; collect it once it has finished.", err=True)
         raise typer.Exit(1)
-    annotations = collect(
-        m, cache=Cache(cache_dir or default_cache_dir()), prices=load_prices(prices) if prices else None
-    )
+    annotations = collect(p, m, store=_store(db), prices=load_prices(prices) if prices else None)
     _write(annotations, fmt, output)
     typer.echo(totals_line(annotations), err=True)
 

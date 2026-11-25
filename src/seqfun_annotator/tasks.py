@@ -3,10 +3,16 @@
 The ``features``, ``active-site`` and ``structure`` prompts are the exact strings of the fs2f tests FEAT,
 PSEUDO and STRFN (ai4curation/fable-sequence-to-function, ``experiments/*/ask.py``), so results can be read
 against the scores reported there. Do not edit them: a changed prompt is a new, unvalidated task.
-``function`` is new in this package and was not tested in fs2f.
+``function`` is new in this package and ``combined`` is the merged reader prompt of protein-function-agent;
+neither was tested in fs2f.
+
+A task's ``version`` is the first 12 hex digits of the SHA-256 of its fixed prompt text, so any edit to a prompt
+gives it a new version, and cached or logged answers are never mixed across prompt versions.
 
 >>> sorted(TASKS)
-['active-site', 'features', 'function', 'structure']
+['active-site', 'combined', 'features', 'function', 'structure']
+>>> TASKS["features"].version
+'b03b98845ad2'
 >>> TASKS["features"].prompt_for("MKTAYIA").endswith(">sequence\\nMKTAYIA")
 True
 """
@@ -19,7 +25,7 @@ from dataclasses import dataclass
 from pydantic import BaseModel
 
 from seqfun_annotator.fasta import wrap
-from seqfun_annotator.schema import ActiveSiteAnswer, FeaturesAnswer, FunctionAnswer, StructureAnswer
+from seqfun_annotator.schema import ActiveSiteAnswer, CombinedAnswer, FeaturesAnswer, FunctionAnswer, StructureAnswer
 
 FEATURES_PROMPT = (
     "Below is a protein sequence in one-letter amino acid codes. Annotate it using only the sequence. "
@@ -71,6 +77,28 @@ FUNCTION_PROMPT = (
     "Do not guess identifiers you are not confident of: leave a field empty or null instead.\n\n>sequence\n"
 )
 
+COMBINED_PROMPT = (
+    "Below is a protein sequence in one-letter amino acid codes. Annotate it using only the sequence. "
+    "Reply with a single JSON object and nothing else, with these keys:\n"
+    '"protein_name": string;\n'
+    '"function": one sentence on the molecular function;\n'
+    '"ec_number": string or null;\n'
+    '"enzyme_family": string or null;\n'
+    '"fold": short name of the predicted fold or structural superfamily, or null;\n'
+    '"pfam_domains": list of {"accession": "PFxxxxx", "name": Pfam short name, "start": int, "end": int} '
+    "(1-based residue positions; empty list if none recognised);\n"
+    '"transmembrane_helices": list of [start, end];\n'
+    '"signal_peptide": true or false;\n'
+    '"catalytic_residues": list of {"role": string, "residue": one-letter code actually present in this sequence, '
+    '"position": int (1-based)};\n'
+    '"substituted_or_missing": list of {"role": string, "expected": string, "found": string, "position": int or null} '
+    "for any canonical catalytic or cofactor-binding residue that this sequence lacks (empty list if none);\n"
+    '"catalytically_active": "yes", "no" or "uncertain";\n'
+    '"recognised": true if you recognise this as a specific known protein, else false;\n'
+    '"reason": one or two sentences.\n'
+    "Do not guess identifiers you are not confident of: leave a field empty or null instead.\n\n>sequence\n"
+)
+
 
 @dataclass(frozen=True)
 class Task:
@@ -82,6 +110,11 @@ class Task:
     answer_model: type[BaseModel]
     source: str
     summary: str
+
+    @property
+    def version(self) -> str:
+        """Short digest of the fixed prompt text."""
+        return prompt_sha256(self.prompt)[:12]
 
     def prompt_for(self, sequence: str) -> str:
         """The full prompt for one sequence: the fixed prefix followed by the residues in lines of 60."""
@@ -158,6 +191,28 @@ TASKS: dict[str, Task] = {
             "new (not tested in fs2f)",
             "Function summary with GO-style molecular function, process and component terms",
         ),
+        Task(
+            "combined",
+            COMBINED_PROMPT,
+            (
+                "protein_name",
+                "function",
+                "ec_number",
+                "enzyme_family",
+                "fold",
+                "pfam_domains",
+                "transmembrane_helices",
+                "signal_peptide",
+                "catalytic_residues",
+                "substituted_or_missing",
+                "catalytically_active",
+                "recognised",
+                "reason",
+            ),
+            CombinedAnswer,
+            "protein-function-agent reader (untested merge of FEAT, PSEUDO, STRFN keys)",
+            "Domains, membrane features, catalytic residues, activity, fold and function in one question",
+        ),
     ]
 }
 
@@ -168,7 +223,7 @@ def get_task(name: str) -> Task:
     >>> get_task("nope")
     Traceback (most recent call last):
     ...
-    KeyError: "unknown task 'nope'; choose from active-site, features, function, structure"
+    KeyError: "unknown task 'nope'; choose from active-site, combined, features, function, structure"
     """
     if name not in TASKS:
         raise KeyError(f"unknown task {name!r}; choose from {', '.join(sorted(TASKS))}")

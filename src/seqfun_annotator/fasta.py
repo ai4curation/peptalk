@@ -27,6 +27,15 @@ class SequenceRecord(BaseModel):
     sequence: str
 
     @property
+    def md5(self) -> str:
+        """MD5 of the upper-case residues, the sequence checksum UniParc uses; the key for stored answers.
+
+        >>> SequenceRecord(id="a", sequence="MK").md5
+        'fbd1e7ba9564863b88d5c43cb833afaf'
+        """
+        return hashlib.md5(self.sequence.encode()).hexdigest()
+
+    @property
     def sha256(self) -> str:
         """Digest of the residues, used to key results to the exact sequence asked.
 
