@@ -173,7 +173,7 @@ class Annotation(BaseModel):
     effort: str
     options: dict[str, Any] = Field(default_factory=dict)
     client: str | None = None
-    seqfun_version: str | None = None
+    annotator_version: str | None = None
     served_model: str | None = None
     fallback_used: bool = False
     response_id: str | None = None

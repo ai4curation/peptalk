@@ -1,10 +1,10 @@
 import pytest
 
-from seqfun_annotator.annotator import Annotator
-from seqfun_annotator.exchange import annotated_fasta, export_records, import_jsonl
-from seqfun_annotator.providers import get_provider
-from seqfun_annotator.report import write_jsonl
-from seqfun_annotator.store import Store
+from llm_protein_annotator.annotator import Annotator
+from llm_protein_annotator.exchange import annotated_fasta, export_records, import_jsonl
+from llm_protein_annotator.providers import get_provider
+from llm_protein_annotator.report import write_jsonl
+from llm_protein_annotator.store import Store
 
 
 @pytest.fixture

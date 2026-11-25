@@ -3,8 +3,8 @@ from pathlib import Path
 
 import pytest
 
-from seqfun_annotator.fasta import read_fasta
-from seqfun_annotator.schema import Completion, Usage
+from llm_protein_annotator.fasta import read_fasta
+from llm_protein_annotator.schema import Completion, Usage
 
 DATA = Path(__file__).parent / "data"
 

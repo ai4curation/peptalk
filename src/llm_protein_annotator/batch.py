@@ -5,9 +5,9 @@ the batch and every question in it, with each prompt's counted input tokens; ``s
 reads the results, logs each call in the store (so later live runs reuse them), and returns annotation records.
 Questions with a stored answer are not submitted.
 
->>> from seqfun_annotator.fasta import SequenceRecord
->>> from seqfun_annotator.annotator import build_questions
->>> from seqfun_annotator.providers import get_provider
+>>> from llm_protein_annotator.fasta import SequenceRecord
+>>> from llm_protein_annotator.annotator import build_questions
+>>> from llm_protein_annotator.providers import get_provider
 >>> qs = build_questions([SequenceRecord(id="sp|P1|X", sequence="MKTAYIAK")], ["features"], True)
 >>> provider = get_provider("stub")
 >>> m = submit(provider, qs, model="stub", effort="high")
@@ -24,13 +24,13 @@ from pathlib import Path
 
 from pydantic import BaseModel
 
-from seqfun_annotator.annotator import Question, fill, finalize, new_annotation, now
-from seqfun_annotator.fasta import SequenceRecord, safe_id
-from seqfun_annotator.pricing import Price, price_for
-from seqfun_annotator.providers.base import Provider
-from seqfun_annotator.schema import Annotation
-from seqfun_annotator.store import Store
-from seqfun_annotator.tasks import get_task
+from llm_protein_annotator.annotator import Question, fill, finalize, new_annotation, now
+from llm_protein_annotator.fasta import SequenceRecord, safe_id
+from llm_protein_annotator.pricing import Price, price_for
+from llm_protein_annotator.providers.base import Provider
+from llm_protein_annotator.schema import Annotation
+from llm_protein_annotator.store import Store
+from llm_protein_annotator.tasks import get_task
 
 
 class BatchEntry(BaseModel):

@@ -29,4 +29,4 @@ build:
 
 # One live call per task on the example file with a cheap model (about one cent; needs ANTHROPIC_API_KEY; logged in the default store)
 smoke model="claude-haiku-5-5":
-    uv run seqfun annotate tests/data/example.fasta -m {{model}} -e low -t features -t active-site --no-reuse -f tsv
+    uv run lpa annotate tests/data/example.fasta -m {{model}} -e low -t features -t active-site --no-reuse -f tsv

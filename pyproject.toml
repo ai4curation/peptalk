@@ -1,5 +1,5 @@
 [project]
-name = "seqfun-annotator"
+name = "llm-protein-annotator"
 version = "0.1.0"
 description = "Annotate protein sequences with frontier language models from sequence alone: domains, membrane features, active sites, structure and function"
 readme = "README.md"
@@ -32,10 +32,11 @@ openai = [
 ]
 
 [project.scripts]
-seqfun = "seqfun_annotator.cli:app"
+lpa = "llm_protein_annotator.cli:app"
+llm-protein-annotator = "llm_protein_annotator.cli:app"
 
 [project.urls]
-Homepage = "https://github.com/ai4curation/seqfun-annotator"
+Homepage = "https://github.com/ai4curation/llm-protein-annotator"
 Study = "https://github.com/ai4curation/fable-sequence-to-function"
 
 [build-system]

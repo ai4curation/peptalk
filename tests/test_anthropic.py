@@ -5,8 +5,8 @@ import httpx2
 import pytest
 from anthropic.types.messages import MessageBatchSucceededResult
 
-from seqfun_annotator.providers import ProviderError
-from seqfun_annotator.providers.anthropic import FALLBACK_BETA, AnthropicProvider
+from llm_protein_annotator.providers import ProviderError
+from llm_protein_annotator.providers.anthropic import FALLBACK_BETA, AnthropicProvider
 
 
 def message(text="{}", stop="end_turn", iterations=None, model="claude-opus-5-5"):

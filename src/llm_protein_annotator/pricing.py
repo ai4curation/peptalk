@@ -19,7 +19,7 @@ from pathlib import Path
 
 from pydantic import BaseModel
 
-from seqfun_annotator.schema import Usage
+from llm_protein_annotator.schema import Usage
 
 
 class Price(BaseModel):

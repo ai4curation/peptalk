@@ -1,4 +1,4 @@
-"""The ``seqfun`` command line."""
+"""The ``lpa`` command line (also installed as ``llm-protein-annotator``)."""
 
 from __future__ import annotations
 
@@ -9,17 +9,17 @@ from typing import Annotated, Any
 
 import typer
 
-from seqfun_annotator import __version__
-from seqfun_annotator.annotator import Annotator, build_questions, new_annotation
-from seqfun_annotator.exchange import annotated_fasta, export_records, import_jsonl
-from seqfun_annotator.fasta import SequenceRecord, format_fasta, parse_fasta, shuffle_sequence
-from seqfun_annotator.pricing import load_prices
-from seqfun_annotator.providers import PROVIDERS, get_provider, provider_for_model
-from seqfun_annotator.providers.base import Provider
-from seqfun_annotator.report import dumps_json, read_jsonl, totals_line, write_jsonl, write_tsv
-from seqfun_annotator.schema import Annotation
-from seqfun_annotator.store import DEFAULT_KEY, KEY_FIELDS, Store, default_db_path
-from seqfun_annotator.tasks import TASKS
+from llm_protein_annotator import __version__
+from llm_protein_annotator.annotator import Annotator, build_questions, new_annotation
+from llm_protein_annotator.exchange import annotated_fasta, export_records, import_jsonl
+from llm_protein_annotator.fasta import SequenceRecord, format_fasta, parse_fasta, shuffle_sequence
+from llm_protein_annotator.pricing import load_prices
+from llm_protein_annotator.providers import PROVIDERS, get_provider, provider_for_model
+from llm_protein_annotator.providers.base import Provider
+from llm_protein_annotator.report import dumps_json, read_jsonl, totals_line, write_jsonl, write_tsv
+from llm_protein_annotator.schema import Annotation
+from llm_protein_annotator.store import DEFAULT_KEY, KEY_FIELDS, Store, default_db_path
+from llm_protein_annotator.tasks import TASKS
 
 app = typer.Typer(
     help="Annotate protein sequences with a frontier language model, from sequence alone.", no_args_is_help=True
@@ -51,7 +51,7 @@ ShuffleOpt = Annotated[
 ]
 DbOpt = Annotated[
     Path | None,
-    typer.Option("--db", help="SQLite log and cache [default: ~/.local/share/seqfun-annotator/seqfun.db]."),
+    typer.Option("--db", help="SQLite log and cache [default: ~/.local/share/llm-protein-annotator/lpa.db]."),
 ]
 ReuseOpt = Annotated[bool, typer.Option("--reuse/--no-reuse", help="Reuse a stored answer instead of asking again.")]
 KeyOpt = Annotated[
@@ -285,7 +285,7 @@ def batch_submit(
     max_tokens: MaxTokensOpt = 64_000,
 ) -> None:
     """Submit every question as one batch to the model's provider."""
-    from seqfun_annotator import batch
+    from llm_protein_annotator import batch
 
     p = _provider(provider, model, max_tokens=max_tokens)
     questions = build_questions(_read_records(fasta), _check_tasks(task), shuffle_control)
@@ -305,7 +305,7 @@ def batch_submit(
 @batch_app.command("status")
 def batch_status(manifest: Annotated[Path, typer.Argument(help="Manifest written by 'batch submit'.")]) -> None:
     """Show a batch's state and counts."""
-    from seqfun_annotator.batch import BatchManifest
+    from llm_protein_annotator.batch import BatchManifest
 
     m = BatchManifest.load(manifest)
     s = _provider(m.provider, m.model).batch_status(m.batch_id)
@@ -322,7 +322,7 @@ def batch_collect(
     prices: PricesOpt = None,
 ) -> None:
     """Read a finished batch's results, log them in the store, and write annotation records."""
-    from seqfun_annotator.batch import BatchManifest, collect
+    from llm_protein_annotator.batch import BatchManifest, collect
 
     m = BatchManifest.load(manifest)
     p = _provider(m.provider, m.model)

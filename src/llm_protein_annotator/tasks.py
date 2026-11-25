@@ -24,8 +24,14 @@ from dataclasses import dataclass
 
 from pydantic import BaseModel
 
-from seqfun_annotator.fasta import wrap
-from seqfun_annotator.schema import ActiveSiteAnswer, CombinedAnswer, FeaturesAnswer, FunctionAnswer, StructureAnswer
+from llm_protein_annotator.fasta import wrap
+from llm_protein_annotator.schema import (
+    ActiveSiteAnswer,
+    CombinedAnswer,
+    FeaturesAnswer,
+    FunctionAnswer,
+    StructureAnswer,
+)
 
 FEATURES_PROMPT = (
     "Below is a protein sequence in one-letter amino acid codes. Annotate it using only the sequence. "

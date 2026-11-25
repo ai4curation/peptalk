@@ -11,7 +11,7 @@ from typing import Any, Protocol
 
 from pydantic import BaseModel
 
-from seqfun_annotator.schema import Completion
+from llm_protein_annotator.schema import Completion
 
 
 class ProviderError(RuntimeError):

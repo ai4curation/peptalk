@@ -1,10 +1,10 @@
-# seqfun-annotator
+# llm-protein-annotator
 
 Annotate protein sequences with a general-purpose language model, from the sequence alone: Pfam domains with
 boundaries, transmembrane helices, signal peptides, catalytic residues that are present or substituted,
 secondary structure and contacts, and function.
 
-seqfun-annotator is the tooling for the questions of
+llm-protein-annotator is the tooling for the questions of
 [fable-sequence-to-function](https://github.com/ai4curation/fable-sequence-to-function) (fs2f), which tested
 whether frontier models can read protein sequences directly. It asks each question as one direct API call to
 Anthropic, Gemini or OpenAI: one user message holding the prompt and the sequence, with no system prompt, no
@@ -15,7 +15,7 @@ tools and no agent. Every call is logged with full provenance, checked against t
 fs2f asked most of its Claude questions through the Claude Code command line. That route adds context of its
 own and can attach connector tools: with the original flags a one-sentence prompt carried 5,851 input tokens,
 and two of the PSEUDO questions carried 97,813 and 6,413. Those results should be read as possibly contaminated.
-A direct API call carries only what the caller sends, and seqfun checks it: before each call it counts the
+A direct API call carries only what the caller sends, and the annotator checks it: before each call it counts the
 prompt's tokens with the provider's counting endpoint, and the record's `input_tokens_match` check fails if the
 call reported any more. In a live test of this package, an active-site question on the ROP17 kinase reported 829
 input tokens, the count for the prompt alone.
@@ -39,7 +39,7 @@ From the fs2f tests (November 2026; small test sets, sampled answers, mostly thr
 - **No next-residue advantage needed.** Gemini 4 Neon showed no next-residue advantage over shuffled sequence,
   yet detected the catalytic substitutions.
 
-Errors come with the same confidence as correct calls, so seqfun does not ask the model how sure it is. It
+Errors come with the same confidence as correct calls, so the annotator does not ask the model how sure it is. It
 checks each answer instead (see [Checks](#checks-and-confidence)). Treat every answer as a hypothesis to verify.
 None of these results compares the models with specialised predictors (InterProScan, DeepTMHMM, SignalP,
 AlphaFold).
@@ -47,18 +47,18 @@ AlphaFold).
 ## Install
 
 ```bash
-pip install seqfun-annotator                     # Anthropic (Claude) models
-pip install 'seqfun-annotator[gemini,openai]'    # adds Gemini and OpenAI
+pip install llm-protein-annotator                     # Anthropic (Claude) models
+pip install 'llm-protein-annotator[gemini,openai]'    # adds Gemini and OpenAI
 ```
 
-or `uv tool install 'seqfun-annotator[gemini,openai]'`. Keys come from `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`
+or `uv tool install 'llm-protein-annotator[gemini,openai]'`. Keys come from `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`
 (or `GOOGLE_API_KEY`) and `OPENAI_API_KEY`.
 
 ## Use
 
 ```bash
-seqfun annotate proteins.fasta -t features -t active-site --shuffle-control -o results.jsonl
-seqfun summarize results.jsonl > summary.tsv
+lpa annotate proteins.fasta -t features -t active-site --shuffle-control -o results.jsonl
+lpa summarize results.jsonl > summary.tsv
 ```
 
 ```
@@ -75,15 +75,15 @@ calls no model, for checking a pipeline.
 
 | Command | What it does |
 |---|---|
-| `seqfun annotate FASTA` | Ask each task of each sequence; write JSONL (`-f tsv` for a summary table, `-f json`). `-` reads standard input. |
-| `seqfun summarize RESULTS.jsonl` | Summary table and totals (answers, reused, errors, flagged, tokens, dollars). |
-| `seqfun log [--sql QUERY]` | List recent calls from the store, or run a read-only SQL query on it. |
-| `seqfun export` / `seqfun import FILE...` | Write every logged call as JSONL; add exported calls to a store, skipping ones already present. |
-| `seqfun fasta` | Each annotated sequence once, named by its MD5, for `diamond makedb` or `makeblastdb`. |
-| `seqfun tasks [--show TASK]` | List the tasks with their prompt versions, or print a task's full prompt. |
-| `seqfun shuffle FASTA` | Write the shuffled control sequences, as the annotator makes them. |
-| `seqfun batch submit FASTA --manifest m.json` | Submit everything as one batch (Anthropic, Gemini or OpenAI; half price, within 24 hours). |
-| `seqfun batch status m.json` / `seqfun batch collect m.json` | Poll the batch, then log its results and write the records. |
+| `lpa annotate FASTA` | Ask each task of each sequence; write JSONL (`-f tsv` for a summary table, `-f json`). `-` reads standard input. |
+| `lpa summarize RESULTS.jsonl` | Summary table and totals (answers, reused, errors, flagged, tokens, dollars). |
+| `lpa log [--sql QUERY]` | List recent calls from the store, or run a read-only SQL query on it. |
+| `lpa export` / `lpa import FILE...` | Write every logged call as JSONL; add exported calls to a store, skipping ones already present. |
+| `lpa fasta` | Each annotated sequence once, named by its MD5, for `diamond makedb` or `makeblastdb`. |
+| `lpa tasks [--show TASK]` | List the tasks with their prompt versions, or print a task's full prompt. |
+| `lpa shuffle FASTA` | Write the shuffled control sequences, as the annotator makes them. |
+| `lpa batch submit FASTA --manifest m.json` | Submit everything as one batch (Anthropic, Gemini or OpenAI; half price, within 24 hours). |
+| `lpa batch status m.json` / `lpa batch collect m.json` | Poll the batch, then log its results and write the records. |
 
 ### Tasks
 
@@ -120,13 +120,13 @@ invocation in the reply, or no valid answer object). `checks_passed` means only 
 
 ### The store: log and cache
 
-Every call that reaches a provider is logged in a SQLite file (`~/.local/share/seqfun-annotator/seqfun.db`, or
-`--db` / `$SEQFUN_DB`), failures and refusals included. Each record holds the sequence and its MD5, the prompt
+Every call that reaches a provider is logged in a SQLite file (`~/.local/share/llm-protein-annotator/lpa.db`, or
+`--db` / `$LPA_DB`), failures and refusals included. Each record holds the sequence and its MD5, the prompt
 version and hash, provider, model, the model that served the answer, effort, the request options as sent, the
 client library version, input, output and thinking tokens, the prompt-only token count, cost, stop reason,
 start and finish times, and the reply text.
 
-The store is also the cache. Before asking, seqfun looks for a usable stored answer whose key fields match. The
+The store is also the cache. Before asking, the annotator looks for a usable stored answer whose key fields match. The
 default key is `seq_md5,task,prompt_version,provider,model,effort`, so a renamed sequence is still found and an
 interrupted run resumes where it stopped. Set your own with `--cache-key`. For example,
 `--cache-key seq_md5,task,prompt_version,model` reuses an answer given at any effort, and adding `options`
@@ -134,20 +134,20 @@ requires identical request options. `--no-reuse` asks again. Answers are sampled
 sample. A reused answer keeps the id (`uid`) of the call that produced it.
 
 ```bash
-seqfun log --sql "SELECT model, count(*), sum(thinking_tokens), round(sum(cost_usd), 2) FROM calls GROUP BY model"
+lpa log --sql "SELECT model, count(*), sum(thinking_tokens), round(sum(cost_usd), 2) FROM calls GROUP BY model"
 ```
 
 ### Sharing and merging results
 
-`seqfun export` writes self-contained JSONL records. `seqfun import` adds only the calls a store does not have,
-so exports from several people can be pooled without duplicates. `seqfun fasta` writes each annotated sequence
+`lpa export` writes self-contained JSONL records. `lpa import` adds only the calls a store does not have,
+so exports from several people can be pooled without duplicates. `lpa fasta` writes each annotated sequence
 once, named by its MD5, ready for a DIAMOND or BLAST database whose hits join back to the records on `seq_md5`.
 [docs/shared-database.md](docs/shared-database.md) sketches a shared, searchable database built on these
 pieces. It is designed, not built.
 
 ### Batches
 
-`seqfun batch submit` sends every question as one batch to the model's provider: Anthropic Message Batches,
+`lpa batch submit` sends every question as one batch to the model's provider: Anthropic Message Batches,
 the OpenAI Batch API, or Gemini batch mode. Batches cost half as much and return within 24 hours. Questions with
 a stored answer are left out. The manifest file records the batch and each question, so `status` and `collect`
 can run later from another shell. Collected results go into the store like live calls, and collecting twice
@@ -171,9 +171,9 @@ off by default because which model answers matters, and `served_model` records i
 ### Python
 
 ```python
-from seqfun_annotator import Annotator, Store, read_fasta
-from seqfun_annotator.providers import get_provider
-from seqfun_annotator.store import default_db_path
+from llm_protein_annotator import Annotator, Store, read_fasta
+from llm_protein_annotator.providers import get_provider
+from llm_protein_annotator.store import default_db_path
 
 annotator = Annotator(get_provider("anthropic"), model="claude-fable-5-2", effort="high",
                       store=Store(default_db_path()))

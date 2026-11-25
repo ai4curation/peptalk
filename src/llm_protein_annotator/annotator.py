@@ -1,7 +1,7 @@
 """Annotating sequences: build prompts, call the provider (or reuse a stored answer), parse, check, price, log.
 
->>> from seqfun_annotator.providers import get_provider
->>> from seqfun_annotator.fasta import SequenceRecord
+>>> from llm_protein_annotator.providers import get_provider
+>>> from llm_protein_annotator.fasta import SequenceRecord
 >>> ann = Annotator(get_provider("stub"), model="stub", effort="low")
 >>> out = ann.annotate([SequenceRecord(id="p1", sequence="MKTAYIAKQR")], ["features"], shuffle_control=True)
 >>> [(a.id, a.condition, a.confidence) for a in out]
@@ -21,15 +21,15 @@ from dataclasses import dataclass
 
 from pydantic import BaseModel, ValidationError
 
-from seqfun_annotator import __version__
-from seqfun_annotator.checks import check_answer, control_check, input_check
-from seqfun_annotator.fasta import SequenceRecord, shuffle_sequence
-from seqfun_annotator.parse import answer_object, has_tool_call
-from seqfun_annotator.pricing import Price, cost, price_for
-from seqfun_annotator.providers.base import Provider, ProviderError
-from seqfun_annotator.schema import Annotation, Completion, Confidence
-from seqfun_annotator.store import Store
-from seqfun_annotator.tasks import Task, get_task, prompt_sha256
+from llm_protein_annotator import __version__
+from llm_protein_annotator.checks import check_answer, control_check, input_check
+from llm_protein_annotator.fasta import SequenceRecord, shuffle_sequence
+from llm_protein_annotator.parse import answer_object, has_tool_call
+from llm_protein_annotator.pricing import Price, cost, price_for
+from llm_protein_annotator.providers.base import Provider, ProviderError
+from llm_protein_annotator.schema import Annotation, Completion, Confidence
+from llm_protein_annotator.store import Store
+from llm_protein_annotator.tasks import Task, get_task, prompt_sha256
 
 
 @dataclass(frozen=True)
@@ -74,7 +74,7 @@ def now() -> str:
 def parse_answer(task: Task, text: str) -> tuple[BaseModel | None, dict | None, str | None]:
     """The validated answer, the raw answer object, and any problem found.
 
-    >>> from seqfun_annotator.tasks import TASKS
+    >>> from llm_protein_annotator.tasks import TASKS
     >>> parse_answer(TASKS["features"], 'no json here')[2]
     'no answer object in reply'
     """
@@ -112,7 +112,7 @@ def new_annotation(q: Question, provider: Provider, model: str, effort: str) -> 
         effort=effort,
         options=provider.request_options(model, effort),
         client=provider.client_version,
-        seqfun_version=__version__,
+        annotator_version=__version__,
         prompt_version=q.task.version,
         prompt_sha256=prompt_sha256(q.prompt),
         started_at=now(),

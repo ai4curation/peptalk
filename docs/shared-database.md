@@ -1,6 +1,6 @@
 # A shared database of sequence reads (design, not built)
 
-The goal: results from everyone who runs seqfun-annotator can be pooled in one database, and a new protein can
+The goal: results from everyone who runs llm-protein-annotator can be pooled in one database, and a new protein can
 be searched against every annotated sequence (DIAMOND or BLAST) to find what models have said about it and its
 relatives. This note records the design choices already made in the package so that pooling needs no migration,
 and sketches the service. Nothing here is built yet beyond the local pieces listed under "Already in place".
@@ -13,18 +13,18 @@ and sketches the service. Nothing here is built yet beyond the local pieces list
 - **Every call has a stable id.** `uid` is a random UUID for a live call, and a hash of batch id and request id
   for a batch call. A reused (cached) answer keeps the uid of the call that produced it, so it is never counted
   twice.
-- **Exports merge without duplicates.** `seqfun export` writes one self-contained JSON record per line;
-  `seqfun import` adds records whose uid is new and skips the rest. Concatenating exports from several people and
+- **Exports merge without duplicates.** `lpa export` writes one self-contained JSON record per line;
+  `lpa import` adds records whose uid is new and skips the rest. Concatenating exports from several people and
   importing them gives the union. Two people asking the same question get two uids: both samples are kept, which
   is what a sampled model answer calls for.
 - **Prompt versions are content hashes.** `prompt_version` is the first 12 hex digits of the SHA-256 of the
   task's fixed prompt text, so records from an edited prompt can never be mistaken for records of the original.
   `prompt_sha256` hashes the full prompt including the sequence.
 - **Provenance travels with the record:** provider, model, served model, effort, request options, client library
-  and version, seqfun version, token counts including thinking, the prompt-only token count and the
+  and version, annotator version, token counts including thinking, the prompt-only token count and the
   `input_tokens_match` check, cost, stop reason, timestamps, and batch id.
-- **FASTA for search.** `seqfun fasta` writes each annotated real sequence once, named by its MD5, with the ids
-  and tasks it was annotated under. `diamond makedb --in annotated.fasta -d seqfun` builds a search database;
+- **FASTA for search.** `lpa fasta` writes each annotated real sequence once, named by its MD5, with the ids
+  and tasks it was annotated under. `diamond makedb --in annotated.fasta -d lpa` builds a search database;
   hits join back to the records on `seq_md5`.
 
 ## The shared service (sketch)

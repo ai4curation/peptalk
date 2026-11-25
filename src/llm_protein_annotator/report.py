@@ -1,6 +1,6 @@
 """Reading and writing annotation records, and short summaries of them.
 
->>> from seqfun_annotator.schema import Annotation
+>>> from llm_protein_annotator.schema import Annotation
 >>> a = Annotation(uid="u1", id="p1", task="features", sequence="M" * 300, seq_md5="x", sequence_length=300,
 ...     provider="stub", model="m", effort="high", prompt_version="v", prompt_sha256="y", started_at="t",
 ...     confidence="checks_passed",
@@ -17,7 +17,7 @@ import json
 from collections.abc import Iterable
 from pathlib import Path
 
-from seqfun_annotator.schema import Annotation
+from llm_protein_annotator.schema import Annotation
 
 SUMMARY_COLUMNS = ["id", "task", "condition", "confidence", "protein_name", "call", "flags", "cost_usd", "reused"]
 

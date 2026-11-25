@@ -1,7 +1,7 @@
-from seqfun_annotator.annotator import build_questions
-from seqfun_annotator.batch import BatchManifest, collect, submit
-from seqfun_annotator.schema import Completion, Usage
-from seqfun_annotator.store import Store
+from llm_protein_annotator.annotator import build_questions
+from llm_protein_annotator.batch import BatchManifest, collect, submit
+from llm_protein_annotator.schema import Completion, Usage
+from llm_protein_annotator.store import Store
 
 
 class FakeBatchProvider:

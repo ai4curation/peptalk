@@ -1,4 +1,4 @@
-"""Gemini through the Google Gen AI SDK (``pip install 'seqfun-annotator[gemini]'``).
+"""Gemini through the Google Gen AI SDK (``pip install 'llm-protein-annotator[gemini]'``).
 
 The request carries only the prompt and a thinking level (the effort, upper-cased: ``LOW``, ``MEDIUM``,
 ``HIGH``), as in the fs2f Gemini runs: no tools and no system instruction. Credentials come from
@@ -14,8 +14,8 @@ from typing import Any
 from google import genai
 from google.genai import errors, types
 
-from seqfun_annotator.providers.base import BatchStatus, ProviderError
-from seqfun_annotator.schema import Completion, Usage
+from llm_protein_annotator.providers.base import BatchStatus, ProviderError
+from llm_protein_annotator.schema import Completion, Usage
 
 DONE_STATES = {
     "JOB_STATE_SUCCEEDED",
@@ -94,7 +94,7 @@ class GeminiProvider:
             }
             for cid, prompt in items
         ]
-        job = self.client.batches.create(model=model, src=src, config={"display_name": "seqfun-annotator"})
+        job = self.client.batches.create(model=model, src=src, config={"display_name": "llm-protein-annotator"})
         return str(job.name)
 
     def batch_status(self, batch_id: str) -> BatchStatus:

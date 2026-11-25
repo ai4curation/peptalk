@@ -2,7 +2,7 @@ import hashlib
 
 import pytest
 
-from seqfun_annotator.tasks import TASKS
+from llm_protein_annotator.tasks import TASKS
 
 # sha256 of the prompt strings `P` in fable-sequence-to-function experiments/{features,pseudo,structure}/ask.py
 FS2F_PROMPT_SHA256 = {

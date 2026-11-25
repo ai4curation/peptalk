@@ -1,4 +1,4 @@
-<title>seqfun provider options</title>
+<title>lpa provider options</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -103,24 +103,24 @@ footer { font-size: 0.88rem; color: var(--muted); max-width: 48rem; display: gri
 
 <main>
   <header>
-    <p class="eyebrow">seqfun-annotator · design note · 25 November 2026</p>
-    <h1>How should seqfun talk to model APIs?</h1>
-    <p class="lede">seqfun-annotator sends one tool-free question per sequence and task to a frontier model, then parses, checks and prices the answer. This note compares four ways to build the provider layer, says what caching and batch APIs buy for this workload, and asks whether protein-function-agent should reuse it.</p>
+    <p class="eyebrow">llm-protein-annotator · design note · 25 November 2026</p>
+    <h1>How should lpa talk to model APIs?</h1>
+    <p class="lede">llm-protein-annotator (command <code>lpa</code>; called seqfun-annotator when this note was written) sends one tool-free question per sequence and task to a frontier model, then parses, checks and prices the answer. This note compares four ways to build the provider layer, says what caching and batch APIs buy for this workload, and asks whether protein-function-agent should reuse it.</p>
   </header>
 
   <div class="verdict">
     <h2>Decision, 25 November 2026</h2>
-    <p><strong>Direct clients for every provider.</strong> If calling close to the metal is best for Anthropic, it is best for all. seqfun keeps its own thin clients for Anthropic (Messages API), Gemini (generateContent) and OpenAI (Responses API). Each sends exactly the protocol, records the same provenance and passes the same input-token check. All three have batch support through their providers' batch APIs. Agents write and maintain this code, so the convenience of a wrapper does not decide it. llm is not used as the provider layer; llm templates for one-off reads are optional and low priority.</p>
+    <p><strong>Direct clients for every provider.</strong> If calling close to the metal is best for Anthropic, it is best for all. lpa keeps its own thin clients for Anthropic (Messages API), Gemini (generateContent) and OpenAI (Responses API). Each sends exactly the protocol, records the same provenance and passes the same input-token check. All three have batch support through their providers' batch APIs. Agents write and maintain this code, so the convenience of a wrapper does not decide it. llm is not used as the provider layer; llm templates for one-off reads are optional and low priority.</p>
     <p><strong>Logging and caching.</strong> Every call is logged with full provenance in a local SQLite store, which is also the cache. The cache key is a set of fields, by default the sequence MD5 (as UniParc uses), task, prompt version, provider, model and effort, so a renamed sequence still hits and a changed prompt never does.</p>
     <p><strong>Built to merge.</strong> Records are keyed by sequence checksum and call id, exports from different people merge without duplicates, and the annotated sequences can be written as FASTA for a DIAMOND or BLAST database. A shared, searchable database is designed (<code>docs/shared-database.md</code>), not built.</p>
-    <p><strong>PFA.</strong> The host runs seqfun for the blind read and hands the JSON to the reviewer. PFA's merged prompt is now seqfun's <code>combined</code> task, marked untested.</p>
+    <p><strong>PFA.</strong> The host runs lpa for the blind read and hands the JSON to the reviewer. PFA's merged prompt is now lpa's <code>combined</code> task, marked untested.</p>
   </div>
 
   <div class="verdict" style="background: var(--surface); border-left-color: var(--rule)">
     <h2>Recommendation given before the decision</h2>
-    <p><strong>Every read goes as a direct, single-shot API call: the prompt and the sequence, and nothing else.</strong> That clean route is a core reason seqfun exists. fs2f's main Claude runs went through the Claude Code command line, which cannot rule out extra context or connector tools. Those runs should be treated as possibly contaminated, and seqfun is the tooling for repeating and extending them.</p>
+    <p><strong>Every read goes as a direct, single-shot API call: the prompt and the sequence, and nothing else.</strong> That clean route is a core reason lpa exists. fs2f's main Claude runs went through the Claude Code command line, which cannot rule out extra context or connector tools. Those runs should be treated as possibly contaminated, and lpa is the tooling for repeating and extending them.</p>
     <p><strong>For Anthropic models, call the Messages API through the <code>anthropic</code> client ourselves (A). For every other provider, use llm as an optional extra (B).</strong> A gives exact control of every field in the request and shares one request builder with the half-price batch path. It also has fewer moving parts: one HTTP client, no plugins, no per-user llm settings. B gives uniform access to Gemini, OpenAI and any other plugin model without client code of ours. Ship the four prompts as llm templates as well, for one-off reads. Drop the hand-written Gemini and OpenAI clients. Don't use litellm.</p>
-    <p><strong>For PFA:</strong> run the sequence read through seqfun on the host and hand the JSON to the reviewer, instead of running a tool-free managed-agent session for it.</p>
+    <p><strong>For PFA:</strong> run the sequence read through lpa on the host and hand the JSON to the reviewer, instead of running a tool-free managed-agent session for it.</p>
   </div>
 
   <section>
@@ -146,11 +146,11 @@ footer { font-size: 0.88rem; color: var(--muted); max-width: 48rem; display: gri
           <tr><td>CLI, original flags</td><td>one sentence, Haiku 5.5</td><td class="num">5,851</td></tr>
           <tr><td>CLI, original flags</td><td>two PSEUDO questions to Fable 5.2, 23 s apart</td><td class="num">97,813 and 6,413</td></tr>
           <tr><td>CLI, revised flags (settings, MCP, slash commands, Chrome off)</td><td>one sentence, Haiku 5.5</td><td class="num">573</td></tr>
-          <tr><td>Messages API, seqfun</td><td>active-site question, ROP17 D436N (count_tokens: 829)</td><td class="num">829</td></tr>
+          <tr><td>Messages API, lpa</td><td>active-site question, ROP17 D436N (count_tokens: 829)</td><td class="num">829</td></tr>
         </tbody>
       </table>
     </div>
-    <p>The larger CLI figure most likely came from connector tools. Whether the stored fs2f rows carried such an attachment is not known: they record cost, not tokens. The revised flags still leave about 570 tokens the tool adds itself. A direct call to the Messages API, or to Gemini's <code>generateContent</code> or OpenAI's Responses API, carries only what the caller sends, and the reported input count can be checked against a token count of the prompt. seqfun is built on that route so that the fs2f results can be repeated cleanly, more robustly and at scale. Results from the CLI route should be read as possibly contaminated until they are.</p>
+    <p>The larger CLI figure most likely came from connector tools. Whether the stored fs2f rows carried such an attachment is not known: they record cost, not tokens. The revised flags still leave about 570 tokens the tool adds itself. A direct call to the Messages API, or to Gemini's <code>generateContent</code> or OpenAI's Responses API, carries only what the caller sends, and the reported input count can be checked against a token count of the prompt. lpa is built on that route so that the fs2f results can be repeated cleanly, more robustly and at scale. Results from the CLI route should be read as possibly contaminated until they are.</p>
   </section>
 
   <section class="prose">
@@ -185,7 +185,7 @@ footer { font-size: 0.88rem; color: var(--muted); max-width: 48rem; display: gri
       <div class="opt">
         <span class="tag">C · templates + package</span>
         <h3>llm templates, thin package on llm</h3>
-        <p>Templates carry prompt, model and options, so <code>llm -t seqfun-feat -m claude-fable-5-2 -o thinking_effort high</code> works for one sequence. The package does the rest on top of B.</p>
+        <p>Templates carry prompt, model and options, so <code>llm -t lpa-feat -m claude-fable-5-2 -o thinking_effort high</code> works for one sequence. The package does the rest on top of B.</p>
         <p><span class="pill good">zero-code one-offs</span> <span class="pill bad">template alone sends the FASTA header</span></p>
       </div>
       <div class="opt excluded">
@@ -240,13 +240,13 @@ with client.messages.stream(
     <p class="prose">What worked: model lookup, options as keyword arguments (validated, so a misspelt option is an error), Pydantic schemas, async models (<code>llm.get_async_model</code>), token usage with thinking, the raw response JSON, and keys from <code>ANTHROPIC_API_KEY</code> or <code>llm keys</code>. The Python API does not log to SQLite unless you call <code>response.log_to_db()</code>.</p>
     <div class="table-wrap">
       <table>
-        <thead><tr><th>Where it is awkward</th><th>What we saw</th><th>Cost to seqfun</th></tr></thead>
+        <thead><tr><th>Where it is awkward</th><th>What we saw</th><th>Cost to lpa</th></tr></thead>
         <tbody>
-          <tr><td>Options named per provider</td><td><code>thinking_effort</code> (Claude), <code>thinking_level</code> (Gemini); passing the other is a <code>ValidationError</code></td><td>A small effort-to-option map, which seqfun has to keep anyway</td></tr>
+          <tr><td>Options named per provider</td><td><code>thinking_effort</code> (Claude), <code>thinking_level</code> (Gemini); passing the other is a <code>ValidationError</code></td><td>A small effort-to-option map, which lpa has to keep anyway</td></tr>
           <tr><td>Errors are not wrapped</td><td>A bad key raised <code>anthropic.AuthenticationError</code>, not <code>llm.ModelError</code></td><td>Catch each provider SDK's error class, as in A</td></tr>
           <tr><td>Global state</td><td>Plugins load from every installed entry point. Models come from the user's llm directory: Chris's own extra OpenAI-compatible models showed up in the listing</td><td>Results can depend on the machine's llm setup. Record the plugin versions</td></tr>
           <tr><td>Typing</td><td>Options arrive as <code>**kwargs</code>; usage details are a plain dict</td><td>Minor</td></tr>
-          <tr><td>Testing</td><td>No built-in fake model; register one through a plugin hook or replace <code>get_model</code></td><td>Minor; seqfun's provider interface already takes a fake</td></tr>
+          <tr><td>Testing</td><td>No built-in fake model; register one through a plugin hook or replace <code>get_model</code></td><td>Minor; lpa's provider interface already takes a fake</td></tr>
           <tr><td>No batch APIs</td><td>Nothing for Message Batches or OpenAI or Gemini batch</td><td>Batch stays on the provider SDK</td></tr>
         </tbody>
       </table>
@@ -255,7 +255,7 @@ with client.messages.stream(
     <p class="prose">Both clients were pointed at a local capture server with the same prompt, model <code>claude-fable-5-2</code> and effort <code>high</code>. Neither sent a system prompt, tools, beta headers or anything besides the prompt. The differences:</p>
     <div class="table-wrap">
       <table>
-        <thead><tr><th>Field</th><th>seqfun (A)</th><th>llm-anthropic 0.31 (B)</th><th>Matters?</th></tr></thead>
+        <thead><tr><th>Field</th><th>lpa (A)</th><th>llm-anthropic 0.31 (B)</th><th>Matters?</th></tr></thead>
         <tbody>
           <tr><td><code>system</code>, <code>tools</code>, <code>anthropic-beta</code></td><td>none</td><td>none</td><td>Both clean</td></tr>
           <tr><td>message content</td><td>a string</td><td>one text block</td><td>No; the same input to the model</td></tr>
@@ -263,12 +263,12 @@ with client.messages.stream(
           <tr><td><code>thinking.display</code></td><td>not sent (omitted)</td><td><code>summarized</code></td><td>Returns a thinking summary; the thinking done and billed is the same</td></tr>
           <tr><td><code>max_tokens</code></td><td>64,000 (option)</td><td>128,000 (model maximum)</td><td>Only for runaway answers</td></tr>
           <tr><td><code>anthropic-version</code> header</td><td>2026-10-21</td><td>2023-06-01</td><td>Older API version</td></tr>
-          <tr><td>client package</td><td><code>anthropic</code> 2.14</td><td><code>anthropic</code> 1.17; llm-anthropic requires <code>&gt;=1.5,&lt;2</code></td><td>Yes: the two can't share an environment until seqfun allows 1.x. seqfun's tests pass on 1.17, so its pin can be loosened</td></tr>
+          <tr><td>client package</td><td><code>anthropic</code> 2.14</td><td><code>anthropic</code> 1.17; llm-anthropic requires <code>&gt;=1.5,&lt;2</code></td><td>Yes: the two can't share an environment until lpa allows 1.x. lpa's tests pass on 1.17, so its pin can be loosened</td></tr>
           <tr><td>model id</td><td><code>claude-fable-5-2</code></td><td><code>anthropic/claude-fable-5-2</code> or alias <code>claude-fable-5.2</code>; the plain API id is unknown to llm</td><td>A name map, or the user learns llm's ids</td></tr>
         </tbody>
       </table>
     </div>
-    <p class="prose">So Chris's recollection is half right. Wrapping one call is easy. A tool that promises the same protocol on every provider still has to handle option names, errors and batch itself, which leaves llm with the transport and model discovery for providers seqfun does not otherwise support.</p>
+    <p class="prose">So Chris's recollection is half right. Wrapping one call is easy. A tool that promises the same protocol on every provider still has to handle option names, errors and batch itself, which leaves llm with the transport and model discovery for providers lpa does not otherwise support.</p>
   </section>
 
   <section>
@@ -287,7 +287,7 @@ with client.messages.stream(
         <p>Anthropic caches a marked prefix (<code>cache_control</code>). A read costs 0.1× input on most models, 0.05× on Opus 5.5 and 0.025× on Fable 5.2, and a write 1.25×. OpenAI caches prefixes of 1,024 tokens or more automatically. Gemini has implicit caching and explicit context caches with a storage fee.</p>
       </div>
     </div>
-    <p class="prose"><strong>For seqfun, provider caching does nothing.</strong> The fixed part of each prompt is 212 to 315 tokens, below Anthropic's 512-token minimum, and the sequence is the part that changes. Even if it cached, input is about 3.5% of the cost; thinking and output are the rest. A long shared system prompt, such as a Pfam list, would make caching pay, but it would also change the protocol being tested.</p>
+    <p class="prose"><strong>For lpa, provider caching does nothing.</strong> The fixed part of each prompt is 212 to 315 tokens, below Anthropic's 512-token minimum, and the sequence is the part that changes. Even if it cached, input is about 3.5% of the cost; thinking and output are the rest. A long shared system prompt, such as a Pfam list, would make caching pay, but it would also change the protocol being tested.</p>
   </section>
 
   <section>
@@ -300,7 +300,7 @@ with client.messages.stream(
           <tr><td>Price</td><td>50% of standard</td><td>50% of standard</td><td>50% of standard</td></tr>
           <tr><td>Turnaround</td><td>most within 1 hour, at most 24 hours</td><td>24-hour window</td><td>24-hour target</td></tr>
           <tr><td>Submit</td><td>requests in the call; up to 100,000 or 256 MB</td><td>upload a JSONL file</td><td>inline requests or a JSONL file</td></tr>
-          <tr><td>In seqfun</td><td class="y">yes: <code>seqfun batch submit / status / collect</code></td><td class="n">not yet</td><td class="n">not yet</td></tr>
+          <tr><td>In lpa</td><td class="y">yes: <code>lpa batch submit / status / collect</code></td><td class="n">not yet</td><td class="n">not yet</td></tr>
           <tr><td>In llm</td><td class="n">no</td><td class="n">no</td><td class="n">no</td></tr>
         </tbody>
       </table>
@@ -318,7 +318,7 @@ with client.messages.stream(
         <h3>What it costs</h3>
         <ul style="padding-left:1.25rem; display:grid; gap:0.35rem">
           <li>Latency: minutes to a day, so not for interactive use.</li>
-          <li>An asynchronous workflow: a manifest, polling, then collecting. seqfun saves the manifest to disk, so a collect can run later from another shell.</li>
+          <li>An asynchronous workflow: a manifest, polling, then collecting. lpa saves the manifest to disk, so a collect can run later from another shell.</li>
           <li>No streaming and no server-side refusal fallback inside a batch.</li>
         </ul>
       </div>
@@ -326,19 +326,19 @@ with client.messages.stream(
   </section>
 
   <section>
-    <h2>Should protein-function-agent use seqfun?</h2>
-    <p class="prose">PFA (PR #1) runs its sequence reader as a separate managed-agent session with no tools. The host writes the reader's only message, so the read is blind. Its prompt merges the keys of the FEAT, PSEUDO and STRFN questions into one, and that merged prompt was not itself tested in fs2f. Its <code>validate.py</code> repeats the residue-position and domain-bound checks that seqfun has. In the YrfG example the reader cost $0.12 and took 19 seconds.</p>
+    <h2>Should protein-function-agent use lpa?</h2>
+    <p class="prose">PFA (PR #1) runs its sequence reader as a separate managed-agent session with no tools. The host writes the reader's only message, so the read is blind. Its prompt merges the keys of the FEAT, PSEUDO and STRFN questions into one, and that merged prompt was not itself tested in fs2f. Its <code>validate.py</code> repeats the residue-position and domain-bound checks that lpa has. In the YrfG example the reader cost $0.12 and took 19 seconds.</p>
     <div class="cols">
       <div>
-        <h3>Option 1: PFA imports seqfun's prompt, schema and checks</h3>
+        <h3>Option 1: PFA imports lpa's prompt, schema and checks</h3>
         <p>One source of prompts, answer models and checks. The reader stays a managed-agent session. Little change to PFA.</p>
       </div>
       <div>
-        <h3>Option 2: the host runs seqfun, the reviewer gets the JSON <span class="pill good">recommended</span></h3>
+        <h3>Option 2: the host runs lpa, the reviewer gets the JSON <span class="pill good">recommended</span></h3>
         <p>A tool-free single question does not need an agent session or a sandbox. A direct call is just as blind, since the host still writes the message. It is also cached and recorded with the served model and cost. Many proteins can go by batch at half price, and the same reads serve curation pipelines outside PFA.</p>
       </div>
     </div>
-    <p class="prose">With option 2, add PFA's merged prompt to seqfun as a task (say <code>combined</code>), marked as an untested merge, so there is a single source of prompts. That also lets someone compare it with the three separate fs2f prompts on the fs2f test sets.</p>
+    <p class="prose">With option 2, add PFA's merged prompt to lpa as a task (say <code>combined</code>), marked as an untested merge, so there is a single source of prompts. That also lets someone compare it with the three separate fs2f prompts on the fs2f test sets.</p>
   </section>
 
   <section>
@@ -351,8 +351,8 @@ with client.messages.stream(
           <tr><td>Moving parts on the Anthropic path</td><td class="y">one HTTP client</td><td class="p">llm, plugin, user's llm settings, HTTP client</td><td class="p">same as B</td><td class="y">one HTTP client</td></tr>
           <tr><td>Gemini, OpenAI and other models</td><td class="p">only what we write</td><td class="y">any llm plugin</td><td class="y">any llm plugin</td><td class="y">any llm plugin</td></tr>
           <tr><td>Batch at half price</td><td class="y">Anthropic</td><td class="n">needs a provider SDK</td><td class="n">needs a provider SDK</td><td class="y">Anthropic</td></tr>
-          <tr><td>Skips repeats and resumes runs</td><td class="y">seqfun cache</td><td class="y">seqfun cache</td><td class="p">package only</td><td class="y">seqfun cache</td></tr>
-          <tr><td>One-off CLI read</td><td class="y"><code>seqfun annotate</code></td><td class="y"><code>seqfun annotate</code></td><td class="y"><code>llm -t</code></td><td class="y">both</td></tr>
+          <tr><td>Skips repeats and resumes runs</td><td class="y">lpa cache</td><td class="y">lpa cache</td><td class="p">package only</td><td class="y">lpa cache</td></tr>
+          <tr><td>One-off CLI read</td><td class="y"><code>lpa annotate</code></td><td class="y"><code>lpa annotate</code></td><td class="y"><code>llm -t</code></td><td class="y">both</td></tr>
           <tr><td>Core dependencies</td><td>anthropic, pydantic, typer</td><td>+ llm, plugins</td><td>+ llm, plugins</td><td>anthropic (pin loosened to allow 1.x), pydantic, typer; llm as an extra</td></tr>
           <tr><td>Code we maintain per provider</td><td class="n">about 60 lines each</td><td class="y">an option-name map</td><td class="y">an option-name map</td><td class="y">Anthropic only</td></tr>
           <tr><td>Tested as a whole</td><td class="y">fakes per SDK</td><td class="p">fake model needed</td><td class="p">templates untestable in pytest</td><td class="y">fakes, plus a fake llm model</td></tr>

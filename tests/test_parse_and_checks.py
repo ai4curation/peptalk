@@ -1,7 +1,7 @@
-from seqfun_annotator.annotator import parse_answer
-from seqfun_annotator.checks import check_answer, control_check
-from seqfun_annotator.schema import ActiveSiteAnswer, FeaturesAnswer
-from seqfun_annotator.tasks import TASKS
+from llm_protein_annotator.annotator import parse_answer
+from llm_protein_annotator.checks import check_answer, control_check
+from llm_protein_annotator.schema import ActiveSiteAnswer, FeaturesAnswer
+from llm_protein_annotator.tasks import TASKS
 
 
 def test_fs2f_features_reply(features_reply, records):

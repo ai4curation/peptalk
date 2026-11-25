@@ -6,9 +6,9 @@ one store: a record already present (same uid) is skipped, and two people asking
 samples, both kept. ``annotated_fasta`` writes each distinct annotated sequence once, named by its MD5, ready for
 ``diamond makedb`` or ``makeblastdb``; the annotations join back to search hits on ``seq_md5``.
 
->>> from seqfun_annotator.annotator import Annotator
->>> from seqfun_annotator.providers import get_provider
->>> from seqfun_annotator.fasta import SequenceRecord
+>>> from llm_protein_annotator.annotator import Annotator
+>>> from llm_protein_annotator.providers import get_provider
+>>> from llm_protein_annotator.fasta import SequenceRecord
 >>> recs = Annotator(get_provider("stub"), model="stub").annotate([SequenceRecord(id="p1", sequence="MKTAYIAKQR")],
 ...                                                              ["features", "active-site"])
 >>> print(annotated_fasta(recs), end="")
@@ -21,9 +21,9 @@ from __future__ import annotations
 from collections.abc import Iterable
 from pathlib import Path
 
-from seqfun_annotator.fasta import SequenceRecord, format_fasta
-from seqfun_annotator.schema import Annotation
-from seqfun_annotator.store import Store
+from llm_protein_annotator.fasta import SequenceRecord, format_fasta
+from llm_protein_annotator.schema import Annotation
+from llm_protein_annotator.store import Store
 
 
 def export_records(store: Store, real_only: bool = False) -> list[Annotation]:
