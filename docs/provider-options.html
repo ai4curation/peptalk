@@ -110,14 +110,16 @@ footer { font-size: 0.88rem; color: var(--muted); max-width: 48rem; display: gri
 
   <div class="verdict">
     <h2>Recommendation</h2>
-    <p><strong>Keep the direct Anthropic client (A) as the main route, and use llm as the route to every other provider (B), as an optional extra.</strong> Ship the four prompts as llm templates too, for one-off reads on the command line. Drop the hand-written Gemini and OpenAI clients. Don't use litellm.</p>
-    <p>The Anthropic route is the one fs2f validated, the only one with a batch API we use, and it needs the Anthropic SDK anyway. llm covers everything else without code of ours to maintain. Its Python API worked cleanly in a live test. The awkward parts are in normalising across providers, and seqfun has to do that itself whichever library it uses.</p>
+    <p><strong>Every read goes as a direct, single-shot API call: the prompt and the sequence, and nothing else.</strong> That clean route is a core reason seqfun exists. fs2f's main Claude runs went through the Claude Code command line, which cannot rule out extra context or connector tools. Those runs should be treated as possibly contaminated, and seqfun is the tooling for repeating and extending them.</p>
+    <p><strong>For Anthropic models, call the Messages API through the <code>anthropic</code> client ourselves (A). For every other provider, use llm as an optional extra (B).</strong> A gives exact control of every field in the request and shares one request builder with the half-price batch path. It also has fewer moving parts: one HTTP client, no plugins, no per-user llm settings. B gives uniform access to Gemini, OpenAI and any other plugin model without client code of ours. Ship the four prompts as llm templates as well, for one-off reads. Drop the hand-written Gemini and OpenAI clients. Don't use litellm.</p>
     <p><strong>For PFA:</strong> run the sequence read through seqfun on the host and hand the JSON to the reviewer, instead of running a tool-free managed-agent session for it.</p>
   </div>
 
   <section>
     <p class="eyebrow">Measured in this session</p>
     <div class="ruler">
+      <div><span class="n num">829 = 829</span><span class="l">input tokens a live direct call reported, and the count_tokens figure for that prompt alone: nothing was added</span></div>
+      <div><span class="n num">5,851–97,813</span><span class="l">input tokens the fs2f command-line route carried for short prompts (original flags; fs2f decoy-control check)</span></div>
       <div><span class="n num">212–315</span><span class="l">tokens in the fixed prompt before the sequence (count_tokens, Fable 5.2 and Opus 5.5)</span></div>
       <div><span class="n num">512</span><span class="l">smallest prefix Anthropic will cache on current models, so the prompts are too short to cache</span></div>
       <div><span class="n num">48 s · $0.19</span><span class="l">one Fable 5.2 high-effort active-site read of the ROP17 D436N mutant; it found D436N and called the kinase inactive</span></div>
@@ -127,10 +129,27 @@ footer { font-size: 0.88rem; color: var(--muted); max-width: 48rem; display: gri
   </section>
 
   <section class="prose">
+    <h2>Why direct API calls</h2>
+    <p>fs2f asked its Claude questions through the Claude Code command line (<code>claude -p --system-prompt "" --tools ""</code>). That route adds context of its own and, on an account with connectors, can attach connector tools. fs2f's own check (<code>experiments/decoy_control/README.md</code>) measured the extra input:</p>
+    <div class="table-wrap">
+      <table style="min-width:34rem">
+        <thead><tr><th>Route</th><th>Question</th><th class="num">Input tokens</th></tr></thead>
+        <tbody>
+          <tr><td>CLI, original flags</td><td>one sentence, Haiku 5.5</td><td class="num">5,851</td></tr>
+          <tr><td>CLI, original flags</td><td>two PSEUDO questions to Fable 5.2, 23 s apart</td><td class="num">97,813 and 6,413</td></tr>
+          <tr><td>CLI, revised flags (settings, MCP, slash commands, Chrome off)</td><td>one sentence, Haiku 5.5</td><td class="num">573</td></tr>
+          <tr><td>Messages API, seqfun</td><td>active-site question, ROP17 D436N (count_tokens: 829)</td><td class="num">829</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>The larger CLI figure most likely came from connector tools. Whether the stored fs2f rows carried such an attachment is not known: they record cost, not tokens. The revised flags still leave about 570 tokens the tool adds itself. A direct call to the Messages API, or to Gemini's <code>generateContent</code> or OpenAI's Responses API, carries only what the caller sends, and the reported input count can be checked against a token count of the prompt. seqfun is built on that route so that the fs2f results can be repeated cleanly, more robustly and at scale. Results from the CLI route should be read as possibly contaminated until they are.</p>
+  </section>
+
+  <section class="prose">
     <h2>Single-shot API calls: a refresher</h2>
     <p>Agent frameworks hide most of this. For a one-question, one-answer call, the practice that matters is:</p>
     <ul>
-      <li><strong>Send exactly the protocol.</strong> One user message, no system prompt, no tools, as fs2f did. Anything else an SDK or wrapper adds becomes part of the experiment.</li>
+      <li><strong>Send exactly the protocol.</strong> One user message, no system prompt, no tools. Anything a client, wrapper or CLI adds becomes part of the experiment, so check the reported input tokens against a token count of the prompt.</li>
       <li><strong>Set effort explicitly.</strong> Defaults differ by model: Opus 5.5 defaults to <code>medium</code>, most others to <code>high</code>. Thinking is always on for Fable 5.2 and Opus 5.5, and adaptive thinking replaces fixed thinking budgets.</li>
       <li><strong>Leave room for thinking.</strong> Thinking counts toward <code>max_tokens</code>. fs2f saw Opus 4.6 hit 64,000 output tokens on structure questions. Stream long requests, or the HTTP call can time out.</li>
       <li><strong>Read <code>stop_reason</code> before the content.</strong> <code>refusal</code> (safety classifier, HTTP 200) and <code>max_tokens</code> both leave no usable answer.</li>
@@ -146,13 +165,13 @@ footer { font-size: 0.88rem; color: var(--muted); max-width: 48rem; display: gri
       <div class="opt">
         <span class="tag">A · current code</span>
         <h3>Own thin clients</h3>
-        <p>About 60 lines per provider over the official SDKs. The Anthropic client sends the exact fs2f request (adaptive thinking, <code>output_config.effort</code>), streams, records thinking tokens and served model, and shares its request builder with the batch path.</p>
+        <p>About 60 lines per provider over each provider's HTTP client package. For Anthropic that is <code>anthropic</code>: a typed client for the Messages API, not the Agent SDK, with nothing agentic in it. We set every field: the prompt, <code>max_tokens</code>, adaptive thinking and <code>output_config.effort</code>. The same request builder feeds the batch path.</p>
         <p><span class="pill good">full control</span> <span class="pill warn">we maintain each provider</span></p>
       </div>
       <div class="opt">
         <span class="tag">B · llm as library</span>
         <h3>llm's Python API</h3>
-        <p><code>llm.get_model(id).prompt(text, **options)</code> for any model a plugin provides. llm-anthropic builds the same request as A. llm-gemini sets <code>thinking_level</code>.</p>
+        <p><code>llm.get_model(id).prompt(text, **options)</code> for any model a plugin provides. llm-anthropic is itself built on the <code>anthropic</code> package and sends nearly the same request as A (captured below). llm-gemini sets <code>thinking_level</code>.</p>
         <p><span class="pill good">any plugin model</span> <span class="pill warn">options and errors differ by provider</span></p>
       </div>
       <div class="opt">
@@ -188,7 +207,7 @@ footer { font-size: 0.88rem; color: var(--muted); max-width: 48rem; display: gri
         <h3>B: llm</h3>
 <pre><code>import llm
 
-model = llm.get_model("claude-fable-5-2")
+model = llm.get_model("anthropic/claude-fable-5-2")  # llm's id
 r = model.prompt(prompt, thinking_effort="high")
 # Gemini would need thinking_level="high"
 text = r.text()
@@ -224,6 +243,23 @@ with client.messages.stream(
         </tbody>
       </table>
     </div>
+    <h3>What llm-anthropic actually sends</h3>
+    <p class="prose">Both clients were pointed at a local capture server with the same prompt, model <code>claude-fable-5-2</code> and effort <code>high</code>. Neither sent a system prompt, tools, beta headers or anything besides the prompt. The differences:</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Field</th><th>seqfun (A)</th><th>llm-anthropic 0.31 (B)</th><th>Matters?</th></tr></thead>
+        <tbody>
+          <tr><td><code>system</code>, <code>tools</code>, <code>anthropic-beta</code></td><td>none</td><td>none</td><td>Both clean</td></tr>
+          <tr><td>message content</td><td>a string</td><td>one text block</td><td>No; the same input to the model</td></tr>
+          <tr><td><code>temperature</code></td><td>not sent</td><td><code>1.0</code>, always</td><td>Not now: it is the default and Fable 5.2 and Opus 5.5 accepted it live. API version 2026-10-21 rejects any sampling parameter, so it will matter when llm-anthropic moves to that version</td></tr>
+          <tr><td><code>thinking.display</code></td><td>not sent (omitted)</td><td><code>summarized</code></td><td>Returns a thinking summary; the thinking done and billed is the same</td></tr>
+          <tr><td><code>max_tokens</code></td><td>64,000 (option)</td><td>128,000 (model maximum)</td><td>Only for runaway answers</td></tr>
+          <tr><td><code>anthropic-version</code> header</td><td>2026-10-21</td><td>2023-06-01</td><td>Older API version</td></tr>
+          <tr><td>client package</td><td><code>anthropic</code> 2.14</td><td><code>anthropic</code> 1.17; llm-anthropic requires <code>&gt;=1.5,&lt;2</code></td><td>Yes: the two can't share an environment until seqfun allows 1.x. seqfun's tests pass on 1.17, so its pin can be loosened</td></tr>
+          <tr><td>model id</td><td><code>claude-fable-5-2</code></td><td><code>anthropic/claude-fable-5-2</code> or alias <code>claude-fable-5.2</code>; the plain API id is unknown to llm</td><td>A name map, or the user learns llm's ids</td></tr>
+        </tbody>
+      </table>
+    </div>
     <p class="prose">So Chris's recollection is half right. Wrapping one call is easy. A tool that promises the same protocol on every provider still has to handle option names, errors and batch itself, which leaves llm with the transport and model discovery for providers seqfun does not otherwise support.</p>
   </section>
 
@@ -243,7 +279,7 @@ with client.messages.stream(
         <p>Anthropic caches a marked prefix (<code>cache_control</code>). A read costs 0.1× input on most models, 0.05× on Opus 5.5 and 0.025× on Fable 5.2, and a write 1.25×. OpenAI caches prefixes of 1,024 tokens or more automatically. Gemini has implicit caching and explicit context caches with a storage fee.</p>
       </div>
     </div>
-    <p class="prose"><strong>For seqfun, provider caching does nothing.</strong> The fixed part of each prompt is 212 to 315 tokens, below Anthropic's 512-token minimum, and the sequence is the part that changes. Even if it cached, input is about 3.5% of the cost; thinking and output are the rest. A long shared system prompt, such as a Pfam list, would make caching pay, but it would also change the validated protocol.</p>
+    <p class="prose"><strong>For seqfun, provider caching does nothing.</strong> The fixed part of each prompt is 212 to 315 tokens, below Anthropic's 512-token minimum, and the sequence is the part that changes. Even if it cached, input is about 3.5% of the cost; thinking and output are the rest. A long shared system prompt, such as a Pfam list, would make caching pay, but it would also change the protocol being tested.</p>
   </section>
 
   <section>
@@ -303,12 +339,13 @@ with client.messages.stream(
       <table>
         <thead><tr><th></th><th>A · own clients</th><th>B · llm library</th><th>C · templates + package</th><th>Recommended: A for Anthropic + B for the rest + templates</th></tr></thead>
         <tbody>
-          <tr><td>Anthropic request identical to fs2f</td><td class="y">yes</td><td class="y">yes (same parameters)</td><td class="p">only if the header is kept out</td><td class="y">yes</td></tr>
+          <tr><td>Request carries only the prompt</td><td class="y">yes; every field set by us</td><td class="y">yes; adds <code>temperature: 1.0</code> and a thinking summary</td><td class="p">only if the FASTA header is kept out</td><td class="y">yes</td></tr>
+          <tr><td>Moving parts on the Anthropic path</td><td class="y">one HTTP client</td><td class="p">llm, plugin, user's llm settings, HTTP client</td><td class="p">same as B</td><td class="y">one HTTP client</td></tr>
           <tr><td>Gemini, OpenAI and other models</td><td class="p">only what we write</td><td class="y">any llm plugin</td><td class="y">any llm plugin</td><td class="y">any llm plugin</td></tr>
           <tr><td>Batch at half price</td><td class="y">Anthropic</td><td class="n">needs a provider SDK</td><td class="n">needs a provider SDK</td><td class="y">Anthropic</td></tr>
           <tr><td>Skips repeats and resumes runs</td><td class="y">seqfun cache</td><td class="y">seqfun cache</td><td class="p">package only</td><td class="y">seqfun cache</td></tr>
           <tr><td>One-off CLI read</td><td class="y"><code>seqfun annotate</code></td><td class="y"><code>seqfun annotate</code></td><td class="y"><code>llm -t</code></td><td class="y">both</td></tr>
-          <tr><td>Core dependencies</td><td>anthropic, pydantic, typer</td><td>+ llm, plugins</td><td>+ llm, plugins</td><td>anthropic, pydantic, typer; llm as an extra</td></tr>
+          <tr><td>Core dependencies</td><td>anthropic, pydantic, typer</td><td>+ llm, plugins</td><td>+ llm, plugins</td><td>anthropic (pin loosened to allow 1.x), pydantic, typer; llm as an extra</td></tr>
           <tr><td>Code we maintain per provider</td><td class="n">about 60 lines each</td><td class="y">an option-name map</td><td class="y">an option-name map</td><td class="y">Anthropic only</td></tr>
           <tr><td>Tested as a whole</td><td class="y">fakes per SDK</td><td class="p">fake model needed</td><td class="p">templates untestable in pytest</td><td class="y">fakes, plus a fake llm model</td></tr>
         </tbody>
@@ -317,6 +354,6 @@ with client.messages.stream(
   </section>
 
   <footer>
-    <p>Sources: live tests on 25 November 2026 with llm 0.38, llm-anthropic 0.31, llm-gemini 0.38.1 and anthropic 2.14; Anthropic token counts from the count_tokens endpoint. fs2f costs are medians of the recorded Fable 5.2 rows in ai4curation/fable-sequence-to-function, collected through a command-line route that added context of its own. The OpenAI and Gemini batch and caching terms are from the providers' documentation as last reviewed, not measured here; check them before relying on them.</p>
+    <p>Sources: live tests on 25 November 2026 with llm 0.38, llm-anthropic 0.31, llm-gemini 0.38.1 and anthropic 2.14; Anthropic token counts from the count_tokens endpoint; request contents captured with a local HTTP server standing in for the API. CLI-route token counts are from fable-sequence-to-function, experiments/decoy_control/README.md. fs2f costs are medians of the recorded Fable 5.2 rows in ai4curation/fable-sequence-to-function, collected through a command-line route that added context of its own. The OpenAI and Gemini batch and caching terms are from the providers' documentation as last reviewed, not measured here; check them before relying on them.</p>
   </footer>
 </main>
