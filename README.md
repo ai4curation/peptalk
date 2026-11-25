@@ -38,11 +38,21 @@ The provider follows from the model name (`claude-*`, `gemini-*`, `gpt-*`), or s
 
 ## Quickstart (CLI)
 
+The examples use [`examples/proteins.fasta`](https://github.com/ai4curation/peptalk/blob/main/examples/proteins.fasta):
+three proteins from the fs2f tests. They are an ABC transporter ATPase (UniProt A0ABQ0J1P6), the *Toxoplasma*
+kinase ROP17 (Q2PAY3), and ROP17 with its catalytic Asp436 changed to Asn. In a clone of this repository the file
+is already there; otherwise fetch it:
+
+```bash
+mkdir -p examples
+curl -sL -o examples/proteins.fasta https://raw.githubusercontent.com/ai4curation/peptalk/main/examples/proteins.fasta
+```
+
 **Annotate a FASTA file.** Each sequence is asked each task. Records go to `results.jsonl`, and progress and a
 cost total go to the terminal:
 
 ```bash
-peptalk annotate proteins.fasta -t features -t active-site -o results.jsonl
+peptalk annotate examples/proteins.fasta -t features -t active-site -o results.jsonl
 peptalk summarize results.jsonl
 ```
 
@@ -55,6 +65,10 @@ Q2PAY3_asp_to_asn  active-site  real       checks_passed  Rhoptry protein of the
 (Answers from live runs: Claude Haiku 5.5 at low effort for the first row, Claude Fable 5.2 at high effort for
 the second.)
 
+`id` is the first word of the FASTA header, kept so you can match results to your input. `protein_name` is the
+model's own guess, made from the residues alone. Headers are never sent to the model, so its name owes nothing
+to yours. Here it named the ROP17 mutant a ROP2-family pseudokinase without seeing "ROP17" anywhere.
+
 **One sequence, from standard input, as a table:**
 
 ```bash
@@ -66,14 +80,14 @@ printf '>my_protein\nMKTAYIAKQRQISFVKSHFSRQLEERLGLIEVQAPILSRVGDGTQDNLSGAEKAVQVKV
 flagged when the shuffled copy also gets a domain, an "active" call or a recognised name:
 
 ```bash
-peptalk annotate proteins.fasta -t features --shuffle-control -o results.jsonl
+peptalk annotate examples/proteins.fasta -t features --shuffle-control -o results.jsonl
 ```
 
 **Many sequences: a batch.** A batch costs half as much and returns within 24 hours. Sequences that already
 have stored answers are left out:
 
 ```bash
-peptalk batch submit proteins.fasta -t features --manifest run1.json
+peptalk batch submit examples/proteins.fasta -t features --manifest run1.json
 peptalk batch status run1.json
 peptalk batch collect run1.json -o results.jsonl
 ```
@@ -84,7 +98,7 @@ peptalk batch collect run1.json -o results.jsonl
 peptalk log                                   # the 20 most recent calls
 peptalk log --sql "SELECT model, count(*) AS calls, sum(thinking_tokens) AS thinking, round(sum(cost_usd), 2) AS usd
                FROM calls GROUP BY model"
-peptalk annotate proteins.fasta --no-reuse    # ask again anyway
+peptalk annotate examples/proteins.fasta --no-reuse    # ask again anyway
 ```
 
 **Export and share:**
@@ -121,7 +135,7 @@ curl -s localhost:8000/annotate -H 'content-type: application/json' -d '{
   "tasks": ["active-site"], "model": "claude-opus-5-5", "effort": "medium"}'
 
 curl -s localhost:8000/jobs -H 'content-type: application/json' \
-  -d "{\"fasta\": $(jq -Rs . < proteins.fasta), \"tasks\": [\"features\"], \"mode\": \"batch\"}"
+  -d "{\"fasta\": $(jq -Rs . < examples/proteins.fasta), \"tasks\": [\"features\"], \"mode\": \"batch\"}"
 curl -s localhost:8000/jobs/JOB_ID
 ```
 
@@ -138,7 +152,7 @@ from peptalk.store import default_db_path
 model = "claude-fable-5-2"
 annotator = Annotator(provider_for(model), model=model, effort="high", store=Store(default_db_path()))
 
-for a in annotator.annotate(read_fasta("proteins.fasta"), ["active-site"], shuffle_control=True):
+for a in annotator.annotate(read_fasta("examples/proteins.fasta"), ["active-site"], shuffle_control=True):
     print(a.id, a.condition, a.confidence, (a.answer or {}).get("catalytically_active"), a.cost_usd)
 ```
 
@@ -158,8 +172,9 @@ Each result is an `Annotation` (a Pydantic model). It carries the parsed `answer
 | `combined` | protein-function-agent reader, **untested merge** | the keys of `features` and `active-site` plus fold, function and recognised, in one question |
 
 Each sequence is sent alone under the header `>sequence`, wrapped at 60 residues. Your FASTA headers are never
-sent, so an identifier such as `sp|P00533|EGFR_HUMAN` cannot give the answer away. The three fs2f prompts are
-checked byte for byte against the study's scripts in the tests. A task's prompt version is a hash of its text,
+sent, so an identifier such as `sp|P00533|EGFR_HUMAN` cannot give the answer away, and the `protein_name` in a
+result is always the model's own. The three fs2f prompts are checked byte for byte against the study's scripts
+in the tests. A task's prompt version is a hash of its text,
 so an edited prompt never shares stored answers with the old one.
 
 The default model is `claude-fable-5-2` at `high` effort, the strongest sequence reader in fs2f.
@@ -284,7 +299,7 @@ AlphaFold. [docs/provider-options.html](https://github.com/ai4curation/peptalk/b
 just test     # pytest and doctests
 just check    # ruff, mypy, tests
 just build    # sdist and wheel in dist/
-just smoke    # live calls with Claude Haiku 5.5 on tests/data/example.fasta (about one cent)
+just smoke    # live calls with Claude Haiku 5.5 on examples/proteins.fasta (about one cent)
 ```
 
 The tests call no model. `tests/data` holds one fs2f FEAT protein and the ROP17 kinase with its catalytic
