@@ -1,0 +1,322 @@
+<title>seqfun provider options</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=Space+Grotesk:wght@500;600&display=swap">
+<style>
+/* Layout: one reading column (~68ch) with full-width tables; a recommendation panel up top, measured facts as a residue-ruler strip. */
+:root {
+  --bg: #f6f7f9;
+  --surface: #ffffff;
+  --fg: #1b2330;
+  --muted: #5a6577;
+  --rule: #d9dee6;
+  --accent: #2f5d8a;
+  --accent-soft: #e4edf6;
+  --good: #2e6b4a;
+  --good-soft: #e3f1e8;
+  --warn: #8a5a12;
+  --warn-soft: #f7eddb;
+  --bad: #9b2f2f;
+  --bad-soft: #f6e3e3;
+  --code-bg: #eef1f5;
+  --font-display: "Space Grotesk", "IBM Plex Sans", system-ui, sans-serif;
+  --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #11151b; --surface: #171c24; --fg: #e3e8ef; --muted: #9aa5b5; --rule: #2a323e;
+    --accent: #8cb6e0; --accent-soft: #1c2a3a; --good: #7fc79d; --good-soft: #17291f;
+    --warn: #e0b46a; --warn-soft: #2d2415; --bad: #e59393; --bad-soft: #2e1a1a; --code-bg: #1d232c;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #11151b; --surface: #171c24; --fg: #e3e8ef; --muted: #9aa5b5; --rule: #2a323e;
+  --accent: #8cb6e0; --accent-soft: #1c2a3a; --good: #7fc79d; --good-soft: #17291f;
+  --warn: #e0b46a; --warn-soft: #2d2415; --bad: #e59393; --bad-soft: #2e1a1a; --code-bg: #1d232c;
+  color-scheme: dark;
+}
+body {
+  background: var(--bg); color: var(--fg);
+  font-family: var(--font-body); font-size: 1rem; line-height: 1.6;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 2.5rem 4rem;
+}
+main { max-width: 68rem; margin: 0 auto; display: grid; gap: 2.75rem; }
+.prose { max-width: 44rem; }
+h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; line-height: 1.2; margin: 0; }
+h1 { font-size: 2.1rem; font-weight: 600; letter-spacing: -0.01em; }
+h2 { font-size: 1.45rem; font-weight: 600; }
+h3 { font-size: 1.08rem; font-weight: 600; }
+p, ul, ol { margin: 0; }
+section { display: grid; gap: 1rem; }
+section > ul, section > ol, .prose ul, .prose ol { padding-left: 1.25rem; display: grid; gap: 0.4rem; }
+.eyebrow { font-family: var(--font-mono); font-size: 0.78rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.lede { font-size: 1.12rem; color: var(--fg); max-width: 44rem; }
+.muted { color: var(--muted); }
+a { color: var(--accent); }
+a:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+code, pre, .mono { font-family: var(--font-mono); font-size: 0.88em; }
+code { background: var(--code-bg); padding: 0.05em 0.35em; border-radius: 3px; }
+pre { background: var(--code-bg); padding: 1rem 1.1rem; border-radius: 6px; overflow-x: auto; line-height: 1.5; margin: 0; }
+pre code { background: none; padding: 0; }
+header { display: grid; gap: 0.75rem; }
+
+.verdict {
+  background: var(--accent-soft); border-left: 4px solid var(--accent);
+  padding: 1.25rem 1.4rem; border-radius: 0 6px 6px 0; display: grid; gap: 0.6rem; max-width: 48rem;
+}
+.verdict h2 { font-size: 1.15rem; }
+
+.ruler { display: grid; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); gap: 0; border-top: 2px solid var(--fg); }
+.ruler div { padding: 0.9rem 1rem 0.9rem 0; border-bottom: 1px solid var(--rule); display: grid; gap: 0.2rem; min-width: 0; }
+.ruler .n { font-family: var(--font-display); font-size: 1.5rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+.ruler .l { font-size: 0.9rem; color: var(--muted); }
+
+.options { display: grid; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); gap: 1rem; }
+.opt { background: var(--surface); border: 1px solid var(--rule); border-radius: 6px; padding: 1rem 1.1rem; display: grid; gap: 0.5rem; align-content: start; min-width: 0; }
+.opt .tag { font-family: var(--font-mono); font-size: 0.8rem; color: var(--muted); }
+.opt.excluded { opacity: 0.85; border-style: dashed; }
+.pill { display: inline-block; font-family: var(--font-mono); font-size: 0.72rem; letter-spacing: 0.05em; text-transform: uppercase; padding: 0.1rem 0.45rem; border-radius: 999px; }
+.pill.good { background: var(--good-soft); color: var(--good); }
+.pill.warn { background: var(--warn-soft); color: var(--warn); }
+.pill.bad { background: var(--bad-soft); color: var(--bad); }
+
+.cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr)); gap: 1.25rem; }
+.cols > * { min-width: 0; display: grid; gap: 0.6rem; align-content: start; }
+
+.table-wrap { overflow-x: auto; border: 1px solid var(--rule); border-radius: 6px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; min-width: 46rem; font-size: 0.93rem; }
+th, td { text-align: left; vertical-align: top; padding: 0.6rem 0.8rem; border-bottom: 1px solid var(--rule); }
+th { font-family: var(--font-display); font-weight: 600; background: var(--code-bg); }
+tr:last-child td { border-bottom: none; }
+td.y { color: var(--good); } td.n { color: var(--bad); } td.p { color: var(--warn); }
+.num { font-variant-numeric: tabular-nums; }
+
+details { background: var(--surface); border: 1px solid var(--rule); border-radius: 6px; padding: 0.8rem 1rem; }
+summary { cursor: pointer; font-weight: 600; }
+footer { font-size: 0.88rem; color: var(--muted); max-width: 48rem; display: grid; gap: 0.4rem; }
+</style>
+
+<main>
+  <header>
+    <p class="eyebrow">seqfun-annotator · design note · 25 November 2026</p>
+    <h1>How should seqfun talk to model APIs?</h1>
+    <p class="lede">seqfun-annotator sends one tool-free question per sequence and task to a frontier model, then parses, checks and prices the answer. This note compares four ways to build the provider layer, says what caching and batch APIs buy for this workload, and asks whether protein-function-agent should reuse it.</p>
+  </header>
+
+  <div class="verdict">
+    <h2>Recommendation</h2>
+    <p><strong>Keep the direct Anthropic client (A) as the main route, and use llm as the route to every other provider (B), as an optional extra.</strong> Ship the four prompts as llm templates too, for one-off reads on the command line. Drop the hand-written Gemini and OpenAI clients. Don't use litellm.</p>
+    <p>The Anthropic route is the one fs2f validated, the only one with a batch API we use, and it needs the Anthropic SDK anyway. llm covers everything else without code of ours to maintain. Its Python API worked cleanly in a live test. The awkward parts are in normalising across providers, and seqfun has to do that itself whichever library it uses.</p>
+    <p><strong>For PFA:</strong> run the sequence read through seqfun on the host and hand the JSON to the reviewer, instead of running a tool-free managed-agent session for it.</p>
+  </div>
+
+  <section>
+    <p class="eyebrow">Measured in this session</p>
+    <div class="ruler">
+      <div><span class="n num">212–315</span><span class="l">tokens in the fixed prompt before the sequence (count_tokens, Fable 5.2 and Opus 5.5)</span></div>
+      <div><span class="n num">512</span><span class="l">smallest prefix Anthropic will cache on current models, so the prompts are too short to cache</span></div>
+      <div><span class="n num">48 s · $0.19</span><span class="l">one Fable 5.2 high-effort active-site read of the ROP17 D436N mutant; it found D436N and called the kinase inactive</span></div>
+      <div><span class="n num">829 / 4,572</span><span class="l">input / output tokens of that call, 3,924 of them thinking. Input was 3.5% of the cost</span></div>
+      <div><span class="n num">$0.005</span><span class="l">six live calls with Haiku 5.5 at low effort (smoke test)</span></div>
+    </div>
+  </section>
+
+  <section class="prose">
+    <h2>Single-shot API calls: a refresher</h2>
+    <p>Agent frameworks hide most of this. For a one-question, one-answer call, the practice that matters is:</p>
+    <ul>
+      <li><strong>Send exactly the protocol.</strong> One user message, no system prompt, no tools, as fs2f did. Anything else an SDK or wrapper adds becomes part of the experiment.</li>
+      <li><strong>Set effort explicitly.</strong> Defaults differ by model: Opus 5.5 defaults to <code>medium</code>, most others to <code>high</code>. Thinking is always on for Fable 5.2 and Opus 5.5, and adaptive thinking replaces fixed thinking budgets.</li>
+      <li><strong>Leave room for thinking.</strong> Thinking counts toward <code>max_tokens</code>. fs2f saw Opus 4.6 hit 64,000 output tokens on structure questions. Stream long requests, or the HTTP call can time out.</li>
+      <li><strong>Read <code>stop_reason</code> before the content.</strong> <code>refusal</code> (safety classifier, HTTP 200) and <code>max_tokens</code> both leave no usable answer.</li>
+      <li><strong>Record provenance.</strong> Keep the served model (fallbacks can change it), the prompt hash, the effort, token counts including thinking, and cost.</li>
+      <li><strong>Let the SDK retry</strong> 429s, 5xx and connection errors. Catch the SDK's own error classes only at the edge of the run, so one failure does not stop a batch of thousands.</li>
+      <li><strong>Treat answers as samples.</strong> Temperature can't be set on these models, so a cache is the reproducibility record, not just a saving.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>The four options</h2>
+    <div class="options">
+      <div class="opt">
+        <span class="tag">A · current code</span>
+        <h3>Own thin clients</h3>
+        <p>About 60 lines per provider over the official SDKs. The Anthropic client sends the exact fs2f request (adaptive thinking, <code>output_config.effort</code>), streams, records thinking tokens and served model, and shares its request builder with the batch path.</p>
+        <p><span class="pill good">full control</span> <span class="pill warn">we maintain each provider</span></p>
+      </div>
+      <div class="opt">
+        <span class="tag">B · llm as library</span>
+        <h3>llm's Python API</h3>
+        <p><code>llm.get_model(id).prompt(text, **options)</code> for any model a plugin provides. llm-anthropic builds the same request as A. llm-gemini sets <code>thinking_level</code>.</p>
+        <p><span class="pill good">any plugin model</span> <span class="pill warn">options and errors differ by provider</span></p>
+      </div>
+      <div class="opt">
+        <span class="tag">C · templates + package</span>
+        <h3>llm templates, thin package on llm</h3>
+        <p>Templates carry prompt, model and options, so <code>llm -t seqfun-feat -m claude-fable-5-2 -o thinking_effort high</code> works for one sequence. The package does the rest on top of B.</p>
+        <p><span class="pill good">zero-code one-offs</span> <span class="pill bad">template alone sends the FASTA header</span></p>
+      </div>
+      <div class="opt excluded">
+        <span class="tag">D · excluded</span>
+        <h3>litellm</h3>
+        <p>Excluded at Chris's request after its past security and supply-chain incidents. It is also a large dependency for a tool that needs one request shape. A compatibility layer also tends to lag new provider parameters such as effort, adaptive thinking and refusal fallbacks.</p>
+        <p><span class="pill bad">not considered further</span></p>
+      </div>
+    </div>
+    <details>
+      <summary>What templates alone cannot do</summary>
+      <ul style="margin-top:0.6rem; padding-left:1.25rem; display:grid; gap:0.35rem">
+        <li>A template's <code>$input</code> is all of standard input. The FASTA header goes to the model, and a header like <code>sp|P00533|EGFR_HUMAN</code> gives the answer away. fs2f sent <code>&gt;sequence</code>.</li>
+        <li>A multi-sequence FASTA becomes a single prompt.</li>
+        <li>Effort option names differ (<code>thinking_effort</code> for Claude, <code>thinking_level</code> for Gemini), so a template either fixes one provider or the user passes <code>-o</code>.</li>
+        <li><code>--schema</code> switches to constrained decoding. fs2f asked for JSON in plain text, so schema variants are a new, untested route and should be opt-in.</li>
+        <li>No shuffled controls, residue checks, skipping of repeats, prices or batch.</li>
+      </ul>
+    </details>
+  </section>
+
+  <section>
+    <h2>Is llm awkward as a Python library?</h2>
+    <p class="prose">Tested live with llm 0.38, llm-anthropic 0.31 and llm-gemini 0.38.1. For a single call it is not awkward:</p>
+    <div class="cols">
+      <div>
+        <h3>B: llm</h3>
+<pre><code>import llm
+
+model = llm.get_model("claude-fable-5-2")
+r = model.prompt(prompt, thinking_effort="high")
+# Gemini would need thinking_level="high"
+text = r.text()
+r.usage()   # Usage(input=36, output=15, details=
+            #  {'output_tokens_details': {'thinking_tokens': 0}})
+r.json()["model"], r.json()["stop_reason"]</code></pre>
+      </div>
+      <div>
+        <h3>A: Anthropic SDK</h3>
+<pre><code>import anthropic
+
+client = anthropic.Anthropic()
+with client.messages.stream(
+    model="claude-fable-5-2", max_tokens=64_000,
+    messages=[{"role": "user", "content": prompt}],
+    thinking={"type": "adaptive"},
+    output_config={"effort": "high"},
+) as s:
+    msg = s.get_final_message()</code></pre>
+      </div>
+    </div>
+    <p class="prose">What worked: model lookup, options as keyword arguments (validated, so a misspelt option is an error), Pydantic schemas, async models (<code>llm.get_async_model</code>), token usage with thinking, the raw response JSON, and keys from <code>ANTHROPIC_API_KEY</code> or <code>llm keys</code>. The Python API does not log to SQLite unless you call <code>response.log_to_db()</code>.</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Where it is awkward</th><th>What we saw</th><th>Cost to seqfun</th></tr></thead>
+        <tbody>
+          <tr><td>Options named per provider</td><td><code>thinking_effort</code> (Claude), <code>thinking_level</code> (Gemini); passing the other is a <code>ValidationError</code></td><td>A small effort-to-option map, which seqfun has to keep anyway</td></tr>
+          <tr><td>Errors are not wrapped</td><td>A bad key raised <code>anthropic.AuthenticationError</code>, not <code>llm.ModelError</code></td><td>Catch each provider SDK's error class, as in A</td></tr>
+          <tr><td>Global state</td><td>Plugins load from every installed entry point. Models come from the user's llm directory: Chris's own extra OpenAI-compatible models showed up in the listing</td><td>Results can depend on the machine's llm setup. Record the plugin versions</td></tr>
+          <tr><td>Typing</td><td>Options arrive as <code>**kwargs</code>; usage details are a plain dict</td><td>Minor</td></tr>
+          <tr><td>Testing</td><td>No built-in fake model; register one through a plugin hook or replace <code>get_model</code></td><td>Minor; seqfun's provider interface already takes a fake</td></tr>
+          <tr><td>No batch APIs</td><td>Nothing for Message Batches or OpenAI or Gemini batch</td><td>Batch stays on the provider SDK</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="prose">So Chris's recollection is half right. Wrapping one call is easy. A tool that promises the same protocol on every provider still has to handle option names, errors and batch itself, which leaves llm with the transport and model discovery for providers seqfun does not otherwise support.</p>
+  </section>
+
+  <section>
+    <h2>Caching</h2>
+    <div class="cols">
+      <div>
+        <h3>Result cache (ours)</h3>
+        <p>A JSON file per completion, keyed by provider, model, effort and the full prompt. A rerun asks only what is missing, so an interrupted job of 5,000 proteins resumes where it stopped. Batch results are written to the same cache.</p>
+      </div>
+      <div>
+        <h3>llm's log</h3>
+        <p>The CLI logs every prompt and response to SQLite. It is a record, not a cache. llm does not skip a prompt it has already answered, and the Python API logs only when asked.</p>
+      </div>
+      <div>
+        <h3>Provider prompt caching</h3>
+        <p>Anthropic caches a marked prefix (<code>cache_control</code>). A read costs 0.1× input on most models, 0.05× on Opus 5.5 and 0.025× on Fable 5.2, and a write 1.25×. OpenAI caches prefixes of 1,024 tokens or more automatically. Gemini has implicit caching and explicit context caches with a storage fee.</p>
+      </div>
+    </div>
+    <p class="prose"><strong>For seqfun, provider caching does nothing.</strong> The fixed part of each prompt is 212 to 315 tokens, below Anthropic's 512-token minimum, and the sequence is the part that changes. Even if it cached, input is about 3.5% of the cost; thinking and output are the rest. A long shared system prompt, such as a Pfam list, would make caching pay, but it would also change the validated protocol.</p>
+  </section>
+
+  <section>
+    <h2>Batch APIs</h2>
+    <p class="prose">A batch API takes many requests at once and returns the results later, at half price. All three providers have one:</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th></th><th>Anthropic Message Batches</th><th>OpenAI Batch</th><th>Gemini batch mode</th></tr></thead>
+        <tbody>
+          <tr><td>Price</td><td>50% of standard</td><td>50% of standard</td><td>50% of standard</td></tr>
+          <tr><td>Turnaround</td><td>most within 1 hour, at most 24 hours</td><td>24-hour window</td><td>24-hour target</td></tr>
+          <tr><td>Submit</td><td>requests in the call; up to 100,000 or 256 MB</td><td>upload a JSONL file</td><td>inline requests or a JSONL file</td></tr>
+          <tr><td>In seqfun</td><td class="y">yes: <code>seqfun batch submit / status / collect</code></td><td class="n">not yet</td><td class="n">not yet</td></tr>
+          <tr><td>In llm</td><td class="n">no</td><td class="n">no</td><td class="n">no</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="cols">
+      <div>
+        <h3>What it buys</h3>
+        <ul style="padding-left:1.25rem; display:grid; gap:0.35rem">
+          <li>Half the cost. At fs2f's recorded median of $0.07 per Fable 5.2 features question, 10,000 proteins with shuffled controls come to about $700 by batch instead of $1,400.</li>
+          <li>No rate-limit handling or client-side concurrency.</li>
+          <li>High throughput, well suited to proteome-scale runs.</li>
+        </ul>
+      </div>
+      <div>
+        <h3>What it costs</h3>
+        <ul style="padding-left:1.25rem; display:grid; gap:0.35rem">
+          <li>Latency: minutes to a day, so not for interactive use.</li>
+          <li>An asynchronous workflow: a manifest, polling, then collecting. seqfun saves the manifest to disk, so a collect can run later from another shell.</li>
+          <li>No streaming and no server-side refusal fallback inside a batch.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Should protein-function-agent use seqfun?</h2>
+    <p class="prose">PFA (PR #1) runs its sequence reader as a separate managed-agent session with no tools. The host writes the reader's only message, so the read is blind. Its prompt merges the keys of the FEAT, PSEUDO and STRFN questions into one, and that merged prompt was not itself tested in fs2f. Its <code>validate.py</code> repeats the residue-position and domain-bound checks that seqfun has. In the YrfG example the reader cost $0.12 and took 19 seconds.</p>
+    <div class="cols">
+      <div>
+        <h3>Option 1: PFA imports seqfun's prompt, schema and checks</h3>
+        <p>One source of prompts, answer models and checks. The reader stays a managed-agent session. Little change to PFA.</p>
+      </div>
+      <div>
+        <h3>Option 2: the host runs seqfun, the reviewer gets the JSON <span class="pill good">recommended</span></h3>
+        <p>A tool-free single question does not need an agent session or a sandbox. A direct call is just as blind, since the host still writes the message. It is also cached and recorded with the served model and cost. Many proteins can go by batch at half price, and the same reads serve curation pipelines outside PFA.</p>
+      </div>
+    </div>
+    <p class="prose">With option 2, add PFA's merged prompt to seqfun as a task (say <code>combined</code>), marked as an untested merge, so there is a single source of prompts. That also lets someone compare it with the three separate fs2f prompts on the fs2f test sets.</p>
+  </section>
+
+  <section>
+    <h2>Side by side</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th></th><th>A · own clients</th><th>B · llm library</th><th>C · templates + package</th><th>Recommended: A for Anthropic + B for the rest + templates</th></tr></thead>
+        <tbody>
+          <tr><td>Anthropic request identical to fs2f</td><td class="y">yes</td><td class="y">yes (same parameters)</td><td class="p">only if the header is kept out</td><td class="y">yes</td></tr>
+          <tr><td>Gemini, OpenAI and other models</td><td class="p">only what we write</td><td class="y">any llm plugin</td><td class="y">any llm plugin</td><td class="y">any llm plugin</td></tr>
+          <tr><td>Batch at half price</td><td class="y">Anthropic</td><td class="n">needs a provider SDK</td><td class="n">needs a provider SDK</td><td class="y">Anthropic</td></tr>
+          <tr><td>Skips repeats and resumes runs</td><td class="y">seqfun cache</td><td class="y">seqfun cache</td><td class="p">package only</td><td class="y">seqfun cache</td></tr>
+          <tr><td>One-off CLI read</td><td class="y"><code>seqfun annotate</code></td><td class="y"><code>seqfun annotate</code></td><td class="y"><code>llm -t</code></td><td class="y">both</td></tr>
+          <tr><td>Core dependencies</td><td>anthropic, pydantic, typer</td><td>+ llm, plugins</td><td>+ llm, plugins</td><td>anthropic, pydantic, typer; llm as an extra</td></tr>
+          <tr><td>Code we maintain per provider</td><td class="n">about 60 lines each</td><td class="y">an option-name map</td><td class="y">an option-name map</td><td class="y">Anthropic only</td></tr>
+          <tr><td>Tested as a whole</td><td class="y">fakes per SDK</td><td class="p">fake model needed</td><td class="p">templates untestable in pytest</td><td class="y">fakes, plus a fake llm model</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <footer>
+    <p>Sources: live tests on 25 November 2026 with llm 0.38, llm-anthropic 0.31, llm-gemini 0.38.1 and anthropic 2.14; Anthropic token counts from the count_tokens endpoint. fs2f costs are medians of the recorded Fable 5.2 rows in ai4curation/fable-sequence-to-function, collected through a command-line route that added context of its own. The OpenAI and Gemini batch and caching terms are from the providers' documentation as last reviewed, not measured here; check them before relying on them.</p>
+  </footer>
+</main>
