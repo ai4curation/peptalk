@@ -1,4 +1,4 @@
-"""OpenAI models through the Responses API (``pip install 'peptalk[openai]'``).
+"""OpenAI models through the Responses API (``pip install 'peptalk-llm[openai]'``).
 
 The request carries only the prompt and a reasoning effort: no tools and no instructions. Batches use the OpenAI
 Batch API on the ``/v1/responses`` endpoint. This route was not tested in fs2f.

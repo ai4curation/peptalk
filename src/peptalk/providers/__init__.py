@@ -32,7 +32,7 @@ def require_extra(name: str) -> None:
     """Raise a clear ImportError when a provider's SDK (an optional extra) is not installed."""
     module = EXTRAS.get(name)
     if module and importlib.util.find_spec(module.split(".")[0]) is None:
-        raise ImportError(f"the {name} provider needs its SDK: pip install 'peptalk[{name}]'")
+        raise ImportError(f"the {name} provider needs its SDK: pip install 'peptalk-llm[{name}]'")
 
 
 def get_provider(name: str, **options: Any) -> Provider:

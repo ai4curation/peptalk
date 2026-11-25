@@ -1,4 +1,4 @@
-"""Gemini through the Google Gen AI SDK (``pip install 'peptalk[gemini]'``).
+"""Gemini through the Google Gen AI SDK (``pip install 'peptalk-llm[gemini]'``).
 
 The request carries only the prompt and a thinking level (the effort, upper-cased: ``LOW``, ``MEDIUM``,
 ``HIGH``), as in the fs2f Gemini runs: no tools and no system instruction. Credentials come from

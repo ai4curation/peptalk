@@ -93,7 +93,7 @@ def to_parquet(records: Iterable[Annotation], path: Path | str) -> int:
     """Write records to Parquet, one row per call (deduplicated by ``uid``); returns the row count.
 
     Scalar fields become columns; tokens are flattened (``input_tokens``, ``output_tokens``, ``thinking_tokens``);
-    the answer, checks, options and reply text are kept as JSON strings. Needs ``peptalk[parquet]``.
+    the answer, checks, options and reply text are kept as JSON strings. Needs ``peptalk-llm[parquet]``.
     """
     import json
 

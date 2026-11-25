@@ -1,6 +1,6 @@
 [project]
-name = "peptalk"
-version = "0.1.0"
+name = "peptalk-llm"
+dynamic = ["version"]
 description = "Ask a frontier LLM what a protein sequence says, from sequence alone: domains, membrane features, active sites, structure and function of full-length proteins"
 readme = "README.md"
 authors = [
@@ -37,7 +37,7 @@ server = [
 parquet = [
     "pyarrow>=26.0.1",
 ]
-all = ["peptalk[gemini,openai,server,parquet]"]
+all = ["peptalk-llm[gemini,openai,server,parquet]"]
 
 [project.scripts]
 peptalk = "peptalk.cli:app"
@@ -47,8 +47,20 @@ Homepage = "https://github.com/ai4curation/peptalk"
 Study = "https://github.com/ai4curation/fable-sequence-to-function"
 
 [build-system]
-requires = ["uv_build>=0.12.3,<0.13.0"]
-build-backend = "uv_build"
+requires = ["hatchling", "uv-dynamic-versioning"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/peptalk"]
+
+[tool.hatch.version]
+source = "uv-dynamic-versioning"
+
+# Ref.: https://github.com/ninoseki/uv-dynamic-versioning/
+[tool.uv-dynamic-versioning]
+vcs = "git"
+style = "pep440"
+fallback-version = "0.0.0"
 
 [dependency-groups]
 dev = [

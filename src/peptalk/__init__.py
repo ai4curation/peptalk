@@ -6,7 +6,7 @@ The prompts and reply-reading rules of the fable-sequence-to-function study
 
 from importlib.metadata import version
 
-__version__ = version("peptalk")
+__version__ = version("peptalk-llm")
 
 from peptalk.annotator import Annotator
 from peptalk.fasta import SequenceRecord, parse_fasta, read_fasta
