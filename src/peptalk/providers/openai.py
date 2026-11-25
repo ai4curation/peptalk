@@ -19,13 +19,18 @@ from peptalk.schema import Completion, Usage
 DONE_STATES = {"completed", "failed", "expired", "cancelled"}
 
 
-def request_body(prompt: str, model: str, effort: str) -> dict[str, Any]:
-    """The Responses API body for one question.
+def request_body(prompt: str, model: str, effort: str, schema: dict[str, Any] | None = None) -> dict[str, Any]:
+    """The Responses API body for one question; with a schema, structured output (not strict) constrains the reply.
 
     >>> request_body("hi", "gpt-6", "high")
     {'model': 'gpt-6', 'input': 'hi', 'reasoning': {'effort': 'high'}}
+    >>> request_body("hi", "gpt-6", "high", {"type": "object"})["text"]["format"]["type"]
+    'json_schema'
     """
-    return {"model": model, "input": prompt, "reasoning": {"effort": effort}}
+    body: dict[str, Any] = {"model": model, "input": prompt, "reasoning": {"effort": effort}}
+    if schema is not None:
+        body["text"] = {"format": {"type": "json_schema", "name": "answer", "schema": schema, "strict": False}}
+    return body
 
 
 def completion_from_response(resp: Response) -> Completion:
@@ -60,29 +65,38 @@ class OpenAIProvider:
     def client_version(self) -> str:
         return f"openai-python {openai.__version__}"
 
-    def request_options(self, model: str, effort: str) -> dict[str, Any]:
-        return {"reasoning": {"effort": effort}}
+    def request_options(self, model: str, effort: str, schema: dict[str, Any] | None = None) -> dict[str, Any]:
+        body = request_body("", model, effort, schema)
+        del body["model"], body["input"]
+        return body
 
-    def complete(self, prompt: str, model: str, effort: str) -> Completion:
+    def complete(self, prompt: str, model: str, effort: str, schema: dict[str, Any] | None = None) -> Completion:
         try:
-            resp = self.client.responses.create(**request_body(prompt, model, effort))
+            resp = self.client.responses.create(**request_body(prompt, model, effort, schema))
         except openai.APIError as e:
             raise ProviderError(f"{type(e).__name__}: {e}") from e
         return completion_from_response(resp)
 
-    def count_tokens(self, prompt: str, model: str) -> int:
+    def count_tokens(self, prompt: str, model: str, schema: dict[str, Any] | None = None) -> int:
+        """Input tokens of the request, including the response format when a schema is given."""
+        extra = {"text": request_body("", model, "low", schema)["text"]} if schema else {}
         try:
-            r = self.client.responses.input_tokens.count(model=model, input=prompt)
+            r = self.client.responses.input_tokens.count(model=model, input=prompt, **extra)
         except openai.APIError as e:
             raise ProviderError(f"{type(e).__name__}: {e}") from e
         return int(r.input_tokens)
 
-    def submit_batch(self, items: list[tuple[str, str]], model: str, effort: str) -> str:
+    def submit_batch(self, items: list[tuple[str, str, dict[str, Any] | None]], model: str, effort: str) -> str:
         lines = [
             json.dumps(
-                {"custom_id": cid, "method": "POST", "url": "/v1/responses", "body": request_body(p, model, effort)}
+                {
+                    "custom_id": cid,
+                    "method": "POST",
+                    "url": "/v1/responses",
+                    "body": request_body(p, model, effort, schema),
+                }
             )
-            for cid, p in items
+            for cid, p, schema in items
         ]
         upload = self.client.files.create(
             file=("peptalk-batch.jsonl", io.BytesIO("\n".join(lines).encode())), purpose="batch"

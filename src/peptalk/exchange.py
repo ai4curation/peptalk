@@ -120,3 +120,63 @@ def to_parquet(records: Iterable[Annotation], path: Path | str) -> int:
         rows.append(row)
     pq.write_table(pa.Table.from_pylist(rows), str(path))
     return len(rows)
+
+
+GFF3_ESCAPE = {"%": "%25", ";": "%3B", "=": "%3D", "&": "%26", ",": "%2C", "\t": "%09", "\n": "%0A"}
+
+
+def _gff_value(value: str) -> str:
+    """Percent-encode the characters GFF3 reserves in attribute values.
+
+    >>> _gff_value("role=base; acid")
+    'role%3Dbase%3B acid'
+    """
+    return "".join(GFF3_ESCAPE.get(c, c) for c in value)
+
+
+def to_gff3(records: Iterable[Annotation], seqid: str = "id") -> str:
+    """GFF3 of the located features in real-sequence answers (domains, TM helices, signals, residues, structure).
+
+    Each template says which of its answers are located features. Pairs (contacts) and whole-protein calls
+    (function, GO terms, activity) have no place in GFF3 and stay in the records. ``seqid`` is ``id`` (the FASTA
+    id) or ``md5`` (the sequence checksum). Coordinates are the model's; check ``confidence`` before use.
+
+    >>> from peptalk.schema import Annotation
+    >>> a = Annotation(uid="u1", id="P1", task="features", sequence="M" * 300, seq_md5="abc", sequence_length=300,
+    ...     provider="stub", model="m", effort="high", prompt_version="v", prompt_sha256="y", started_at="t",
+    ...     confidence="checks_passed", answer={"pfam_domains": [{"accession": "PF00069", "name": "Pkinase",
+    ...     "start": 5, "end": 260}]})
+    >>> print(to_gff3([a]), end="")  # doctest: +NORMALIZE_WHITESPACE
+    ##gff-version 3
+    ##sequence-region P1 1 300
+    P1	peptalk	polypeptide_domain	5	260	.	.	.	ID=u1.1;Name=Pkinase;Dbxref=Pfam:PF00069;task=features;model=m;context=blind;prompt_version=v;confidence=checks_passed;seq_md5=abc
+    """
+    from peptalk.templates import TEMPLATES
+
+    lines = ["##gff-version 3"]
+    regions: dict[str, int] = {}
+    body = []
+    for a in records:
+        if a.condition != "real" or a.answer is None or a.validation_error or a.task not in TEMPLATES:
+            continue
+        template = TEMPLATES[a.task]
+        sid = a.seq_md5 if seqid == "md5" else a.id
+        regions.setdefault(sid, a.sequence_length)
+        answer = template.answer_model.model_validate(a.answer)
+        for i, f in enumerate(template.features(answer), start=1):
+            attrs = {"ID": f"{a.uid}.{i}"}
+            if f.name:
+                attrs["Name"] = f.name
+            attrs.update(f.attributes)
+            attrs.update(
+                task=a.task,
+                model=a.model,
+                context=a.context,
+                prompt_version=a.prompt_version,
+                confidence=a.confidence,
+                seq_md5=a.seq_md5,
+            )
+            col9 = ";".join(f"{k}={_gff_value(v)}" for k, v in attrs.items() if v != "")
+            body.append("\t".join([sid, "peptalk", f.type, str(f.start), str(f.end), ".", ".", ".", col9]))
+    lines += [f"##sequence-region {sid} 1 {n}" for sid, n in regions.items()]
+    return "\n".join(lines + body) + "\n"

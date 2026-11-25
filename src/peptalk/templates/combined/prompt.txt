@@ -1,0 +1,18 @@
+Below is a protein sequence in one-letter amino acid codes. Annotate it {{basis}}. Reply with a single JSON object and nothing else, with these keys:
+"protein_name": string;
+"function": one sentence on the molecular function;
+"ec_number": string or null;
+"enzyme_family": string or null;
+"fold": short name of the predicted fold or structural superfamily, or null;
+"pfam_domains": list of {"accession": "PFxxxxx", "name": Pfam short name, "start": int, "end": int} (1-based residue positions; empty list if none recognised);
+"transmembrane_helices": list of [start, end];
+"signal_peptide": true or false;
+"catalytic_residues": list of {"role": string, "residue": one-letter code actually present in this sequence, "position": int (1-based)};
+"substituted_or_missing": list of {"role": string, "expected": string, "found": string, "position": int or null} for any canonical catalytic or cofactor-binding residue that this sequence lacks (empty list if none);
+"catalytically_active": "yes", "no" or "uncertain";
+"recognised": true if you recognise this as a specific known protein, else false;
+"reason": one or two sentences.
+Do not guess identifiers you are not confident of: leave a field empty or null instead.{{payload}}
+
+>{{header}}
+{{sequence}}

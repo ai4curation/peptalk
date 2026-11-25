@@ -4,10 +4,11 @@ Every request that reaches a provider is logged as one row: the full annotation 
 columns for querying. Failed calls and refusals are logged too. The cache is a lookup in the same table: the
 most recent usable answer whose key fields match. The key fields are configurable; the default is
 
-    seq_md5, task, prompt_version, provider, model, effort
+    seq_md5, task, prompt_version, params, context, payload, output, provider, model, effort
 
-so the same sequence asked the same version of the same task of the same model at the same effort is not asked
-again. Leave out ``effort`` to reuse an answer from any effort, or add ``options`` to require identical request
+so the same sequence asked the same version of the same task (with the same parameters, for ask templates), with
+the same header context, payload and output mode, of the same model at the same effort is not asked again. Blind
+and informed answers never mix, nor answers with and without a rationale, nor free-text and structured answers. Leave out ``effort`` to reuse an answer from any effort, or add ``options`` to require identical request
 options. Answers are sampled, so a cache hit returns a stored sample, not a fresh one.
 
 Rows are keyed by the call's ``uid``, so importing another person's export adds only calls not already present.
@@ -34,8 +35,24 @@ from pathlib import Path
 
 from peptalk.schema import Annotation
 
-KEY_FIELDS = ("seq_md5", "task", "prompt_version", "condition", "provider", "model", "effort", "options")
-DEFAULT_KEY = ("seq_md5", "task", "prompt_version", "provider", "model", "effort")
+KEY_FIELDS = (
+    "seq_md5", "task", "prompt_version", "params", "context", "payload", "output",
+    "condition", "provider", "model", "effort", "options",
+)  # fmt: skip
+DEFAULT_KEY = (
+    "seq_md5",
+    "task",
+    "prompt_version",
+    "params",
+    "context",
+    "payload",
+    "output",
+    "provider",
+    "model",
+    "effort",
+)
+#: Columns added after the first release, with the value older rows get (blind, free-text answers, no extras).
+ADDED_COLUMNS = {"context": "'blind'", "output": "'text'", "params": "'{}'", "payload": "''"}
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS calls (
@@ -61,7 +78,11 @@ CREATE TABLE IF NOT EXISTS calls (
     batch INTEGER NOT NULL,
     started_at TEXT NOT NULL,
     finished_at TEXT,
-    record TEXT NOT NULL
+    record TEXT NOT NULL,
+    context TEXT NOT NULL DEFAULT 'blind',
+    output TEXT NOT NULL DEFAULT 'text',
+    params TEXT NOT NULL DEFAULT '{}',
+    payload TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS calls_key ON calls (seq_md5, task, prompt_version, model, effort);
 CREATE INDEX IF NOT EXISTS calls_started ON calls (started_at);
@@ -129,6 +150,10 @@ class Store:
         self._db = sqlite3.connect(str(path), check_same_thread=False)
         self._db.execute("PRAGMA journal_mode=WAL")
         self._db.executescript(SCHEMA)
+        have = {row[1] for row in self._db.execute("PRAGMA table_info(calls)")}
+        for column, default in ADDED_COLUMNS.items():
+            if column not in have:
+                self._db.execute(f"ALTER TABLE calls ADD COLUMN {column} TEXT NOT NULL DEFAULT {default}")
 
     def add(self, a: Annotation) -> bool:
         """Log one call; returns False when a call with that uid is already stored."""
@@ -156,6 +181,10 @@ class Store:
             a.started_at,
             a.finished_at,
             a.model_copy(update={"cached": False}).model_dump_json(),
+            a.context,
+            a.output,
+            json.dumps(a.params, sort_keys=True),
+            ",".join(a.payload),
         )
         with self._lock, self._db:
             cur = self._db.execute(f"INSERT OR IGNORE INTO calls VALUES ({','.join('?' * len(row))})", row)
@@ -180,6 +209,10 @@ class Store:
             "task": probe.task,
             "prompt_version": probe.prompt_version,
             "condition": probe.condition,
+            "context": probe.context,
+            "output": probe.output,
+            "params": json.dumps(probe.params, sort_keys=True),
+            "payload": ",".join(probe.payload),
             "provider": probe.provider,
             "model": probe.model,
             "effort": probe.effort,

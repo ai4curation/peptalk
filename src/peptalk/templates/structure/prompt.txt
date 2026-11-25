@@ -1,0 +1,4 @@
+Below is a protein sequence in one-letter amino acid codes (it may be a recombinant construct). {{Basis}}, predict its three-dimensional structure and then its function. Reply with a single JSON object and nothing else, with these keys: "helices": list of [start, end] residue ranges predicted to be helix (1-based positions in this sequence); "strands": list of [start, end] ranges predicted to be beta strand; "fold": short name of the predicted fold or structural superfamily; "contacts": list of exactly 20 [i, j] residue pairs with j - i >= 24 that you predict are in contact in the folded structure (C-alpha atoms within 8 angstroms), most confident first; "protein_name": string; "function": one sentence on the molecular function; "functional_residues": list of {"position": int, "residue": one-letter code, "role": string}; "recognised": true if you recognise this as a specific known protein, else false.{{payload}}
+
+>{{header}}
+{{sequence}}

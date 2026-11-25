@@ -1,0 +1,4 @@
+Below is a protein sequence in one-letter amino acid codes. {{Basis}}, predict where the protein is located in the cell and which targeting signals it carries. Reply with a single JSON object and nothing else, with these keys: "localization": list of compartment names, most likely first (for example "cytoplasm", "nucleus", "mitochondrion", "plasma membrane", "secreted"); "targeting_signals": list of {"type": one of "signal peptide", "mitochondrial transit peptide", "chloroplast transit peptide", "nuclear localization signal", "peroxisomal targeting signal", "other", "start": int, "end": int} (1-based residue positions; empty list if none); "transmembrane_helices": list of [start, end]; "protein_name": string; "recognised": true if you recognise this as a specific known protein, else false; "reason": one or two sentences.{{payload}}
+
+>{{header}}
+{{sequence}}

@@ -36,13 +36,13 @@ class ScriptedProvider:
         self.extra = extra
         self.prompts: list[str] = []
 
-    def request_options(self, model, effort):
+    def request_options(self, model, effort, schema=None):
         return {"effort": effort}
 
-    def count_tokens(self, prompt, model):
+    def count_tokens(self, prompt, model, schema=None):
         return 1000 - self.extra
 
-    def complete(self, prompt, model, effort):
+    def complete(self, prompt, model, effort, schema=None):
         self.prompts.append(prompt)
         out = self.reply(prompt)
         if isinstance(out, Exception):

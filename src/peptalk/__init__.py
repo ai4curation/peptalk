@@ -12,6 +12,15 @@ from peptalk.annotator import Annotator
 from peptalk.fasta import SequenceRecord, parse_fasta, read_fasta
 from peptalk.schema import Annotation
 from peptalk.store import Store
-from peptalk.tasks import TASKS
+from peptalk.templates import TEMPLATES
 
-__all__ = ["TASKS", "Annotation", "Annotator", "SequenceRecord", "Store", "__version__", "parse_fasta", "read_fasta"]
+__all__ = [
+    "TEMPLATES",
+    "Annotation",
+    "Annotator",
+    "SequenceRecord",
+    "Store",
+    "__version__",
+    "parse_fasta",
+    "read_fasta",
+]

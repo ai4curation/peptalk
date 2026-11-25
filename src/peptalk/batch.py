@@ -30,7 +30,7 @@ from peptalk.pricing import Price, price_for
 from peptalk.providers.base import Provider
 from peptalk.schema import Annotation
 from peptalk.store import Store
-from peptalk.tasks import get_task
+from peptalk.templates import get_template
 
 
 class BatchEntry(BaseModel):
@@ -40,6 +40,11 @@ class BatchEntry(BaseModel):
     task: str
     condition: str
     sequence: str
+    header: dict[str, str] = {}
+    context: str = "blind"
+    params: dict[str, str] = {}
+    payload: list[str] = []
+    effort: str
     expected_input_tokens: int | None = None
 
 
@@ -48,6 +53,7 @@ class BatchManifest(BaseModel):
     provider: str
     model: str
     effort: str
+    structured: bool = False
     submitted_at: str
     entries: list[BatchEntry]
 
@@ -60,14 +66,22 @@ class BatchManifest(BaseModel):
 
 
 def _question(e: BatchEntry) -> Question:
-    rec = SequenceRecord(id=e.id, description=e.description, sequence=e.sequence)
-    return Question(rec, get_task(e.task), e.condition, e.sequence)
+    rec = SequenceRecord(id=e.id, description=e.description, sequence=e.sequence, header=e.header)
+    return Question(rec, get_template(e.task), e.condition, e.sequence, e.context, e.params, tuple(e.payload))
 
 
 def submit(
-    provider: Provider, questions: list[Question], model: str, effort: str, verify_input: bool = True
+    provider: Provider,
+    questions: list[Question],
+    model: str,
+    effort: str,
+    verify_input: bool = True,
+    structured: bool = False,
 ) -> BatchManifest:
-    """Submit every question as one batch and return its manifest."""
+    """Submit every question as one batch and return its manifest.
+
+    A provider batch runs at one effort, so ``effort`` is required here (templates' defaults are not used).
+    """
     entries = [
         BatchEntry(
             custom_id=f"q{i:04d}-{q.task.name}-{q.condition}-{safe_id(q.record.id)}"[:64],
@@ -76,14 +90,32 @@ def submit(
             task=q.task.name,
             condition=q.condition,
             sequence=q.sequence,
-            expected_input_tokens=provider.count_tokens(q.prompt, model) if verify_input else None,
+            header=q.record.header,
+            context=q.context,
+            params=q.params,
+            payload=list(q.payload),
+            effort=effort,
+            expected_input_tokens=(
+                provider.count_tokens(q.prompt, model, q.task.json_schema() if structured else None)
+                if verify_input
+                else None
+            ),
         )
         for i, q in enumerate(questions)
     ]
-    items = [(e.custom_id, _question(e).prompt) for e in entries]
+    items = []
+    for e in entries:
+        q = _question(e)
+        items.append((e.custom_id, q.prompt, q.task.json_schema() if structured else None))
     batch_id = provider.submit_batch(items, model, effort)
     return BatchManifest(
-        batch_id=batch_id, provider=provider.name, model=model, effort=effort, submitted_at=now(), entries=entries
+        batch_id=batch_id,
+        provider=provider.name,
+        model=model,
+        effort=effort,
+        structured=structured,
+        submitted_at=now(),
+        entries=entries,
     )
 
 
@@ -97,7 +129,7 @@ def collect(
     triples = []
     for e in manifest.entries:
         q = _question(e)
-        ann = new_annotation(q, provider, manifest.model, manifest.effort)
+        ann = new_annotation(q, provider, manifest.model, manifest.effort, manifest.structured)
         # one uid per batch request, so collecting a batch twice logs each call once
         ann.uid = hashlib.sha256(f"{manifest.batch_id}/{e.custom_id}".encode()).hexdigest()[:32]
         ann.started_at, ann.finished_at = manifest.submitted_at, finished

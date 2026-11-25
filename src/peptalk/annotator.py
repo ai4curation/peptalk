@@ -12,24 +12,34 @@
 
 from __future__ import annotations
 
+import csv
 import datetime
+import json
 import time
 import uuid
 from collections.abc import Callable, Iterable, Sequence
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from pathlib import Path
 
 from pydantic import BaseModel, ValidationError
 
 from peptalk import __version__
-from peptalk.checks import check_answer, control_check, input_check
+from peptalk.checks import control_check, input_check, residues_check
 from peptalk.fasta import SequenceRecord, shuffle_sequence
 from peptalk.parse import answer_object, has_tool_call
 from peptalk.pricing import Price, cost, price_for
 from peptalk.providers.base import Provider, ProviderError
 from peptalk.schema import Annotation, Completion, Confidence
 from peptalk.store import Store
-from peptalk.tasks import Task, get_task, prompt_sha256
+from peptalk.templates import (
+    DEFAULT_CONTEXT,
+    Template,
+    canonical_payload,
+    effective_context,
+    get_template,
+    prompt_sha256,
+)
 
 
 @dataclass(frozen=True)
@@ -37,21 +47,38 @@ class Question:
     """One prompt to ask: a record, a task and a condition (real sequence or its shuffled copy)."""
 
     record: SequenceRecord
-    task: Task
+    task: Template
     condition: str
     sequence: str
+    context: str = DEFAULT_CONTEXT
+    params: dict[str, str] = field(default_factory=dict)
+    payload: tuple[str, ...] = ()
+
+    @property
+    def effective_context(self) -> str:
+        """The context the model actually gets (``organism`` without an organism in the header is ``blind``)."""
+        return effective_context(self.record.header, self.context)
 
     @property
     def prompt(self) -> str:
-        return self.task.prompt_for(self.sequence)
+        return self.task.render(self.sequence, self.record.header, self.context, self.params, self.payload)
 
     @property
     def seq_md5(self) -> str:
         return SequenceRecord(id=self.record.id, sequence=self.sequence).md5
 
 
-def build_questions(records: Iterable[SequenceRecord], tasks: Sequence[str], shuffle_control: bool) -> list[Question]:
+def build_questions(
+    records: Iterable[SequenceRecord],
+    tasks: Sequence[str],
+    shuffle_control: bool,
+    context: str = DEFAULT_CONTEXT,
+    params: dict[str, str] | None = None,
+    payload: Sequence[str] = (),
+) -> list[Question]:
     """All questions for the records and tasks, the shuffled copy right after each real one.
+
+    The shuffled copy is asked at the same context level, so it differs from the real question only in its residues.
 
     >>> qs = build_questions([SequenceRecord(id="a", sequence="MKTAYIA")], ["features", "structure"], True)
     >>> [(q.task.name, q.condition) for q in qs]
@@ -60,10 +87,57 @@ def build_questions(records: Iterable[SequenceRecord], tasks: Sequence[str], shu
     out = []
     for rec in records:
         for name in tasks:
-            task = get_task(name)
-            out.append(Question(rec, task, "real", rec.sequence))
+            task = get_template(name)
+            task.render("", rec.header, context, params, canonical_payload(payload))  # fails early on a bad parameter
+            extras = (context, dict(params or {}), canonical_payload(payload))
+            out.append(Question(rec, task, "real", rec.sequence, *extras))
             if shuffle_control:
-                out.append(Question(rec, task, "shuffled", shuffle_sequence(rec.sequence, rec.id)))
+                out.append(Question(rec, task, "shuffled", shuffle_sequence(rec.sequence, rec.id), *extras))
+    return out
+
+
+class Claim(BaseModel):
+    """One claim to ask about one sequence: an ask template and its parameters."""
+
+    id: str
+    task: str
+    params: dict[str, str] = {}
+
+
+def read_claims(path: Path | str) -> list[Claim]:
+    """Claims from a TSV file with columns ``id`` (FASTA id), ``task`` and one column per template parameter.
+
+    Empty cells are left out, so one file can mix templates with different parameters.
+    """
+    with open(path, newline="") as fh:
+        rows = list(csv.DictReader(fh, delimiter="\t"))
+    return [
+        Claim(id=r["id"], task=r["task"], params={k: v for k, v in r.items() if k not in ("id", "task") and v})
+        for r in rows
+    ]
+
+
+def claim_questions(
+    records: Iterable[SequenceRecord],
+    claims: Iterable[Claim],
+    shuffle_control: bool,
+    context: str = DEFAULT_CONTEXT,
+    payload: Sequence[str] = (),
+) -> list[Question]:
+    """One question per claim (and its shuffled copy), for the sequence the claim names.
+
+    >>> recs = [SequenceRecord(id="p1", sequence="MKDA")]
+    >>> qs = claim_questions(recs, [Claim(id="p1", task="ask-catalytic-residue", params={"position": "3",
+    ...                                                                                  "residue": "D"})], True)
+    >>> [(q.task.name, q.condition, q.params["position"]) for q in qs]
+    [('ask-catalytic-residue', 'real', '3'), ('ask-catalytic-residue', 'shuffled', '3')]
+    """
+    by_id = {r.id: r for r in records}
+    out = []
+    for c in claims:
+        if c.id not in by_id:
+            raise ValueError(f"claim names sequence {c.id!r}, which is not in the FASTA input")
+        out += build_questions([by_id[c.id]], [c.task], shuffle_control, context, c.params, payload)
     return out
 
 
@@ -71,11 +145,11 @@ def now() -> str:
     return datetime.datetime.now(datetime.UTC).isoformat(timespec="milliseconds")
 
 
-def parse_answer(task: Task, text: str) -> tuple[BaseModel | None, dict | None, str | None]:
+def parse_answer(task: Template, text: str) -> tuple[BaseModel | None, dict | None, str | None]:
     """The validated answer, the raw answer object, and any problem found.
 
-    >>> from peptalk.tasks import TASKS
-    >>> parse_answer(TASKS["features"], 'no json here')[2]
+    >>> from peptalk.templates import TEMPLATES
+    >>> parse_answer(TEMPLATES["features"], 'no json here')[2]
     'no answer object in reply'
     """
     if has_tool_call(text):
@@ -96,7 +170,7 @@ def confidence(ann: Annotation) -> Confidence:
     return "checks_passed" if all(c.passed for c in ann.checks) else "flagged"
 
 
-def new_annotation(q: Question, provider: Provider, model: str, effort: str) -> Annotation:
+def new_annotation(q: Question, provider: Provider, model: str, effort: str, structured: bool = False) -> Annotation:
     """A record for a question before it is asked: identity, provenance and request options."""
     return Annotation(
         uid=uuid.uuid4().hex,
@@ -110,11 +184,16 @@ def new_annotation(q: Question, provider: Provider, model: str, effort: str) -> 
         provider=provider.name,
         model=model,
         effort=effort,
-        options=provider.request_options(model, effort),
+        options=provider.request_options(model, effort, q.task.json_schema() if structured else None),
         client=provider.client_version,
         annotator_version=__version__,
         prompt_version=q.task.version,
         prompt_sha256=prompt_sha256(q.prompt),
+        context=q.effective_context,
+        output="json_schema" if structured else "text",
+        params=q.params,
+        payload=list(q.payload),
+        header=q.record.header,
         started_at=now(),
     )
 
@@ -139,20 +218,27 @@ def fill(ann: Annotation, q: Question, completion: Completion | None, price: Pri
         if ann.expected_input_tokens is not None:
             ann.checks.append(input_check(completion.usage, ann.expected_input_tokens))
         if parsed is not None:
-            ann.checks.extend(check_answer(q.task.name, parsed, q.sequence))
+            ann.checks.extend(q.task.checks(parsed, q.sequence, q.params))
+            evidence = getattr(parsed, "evidence", None)
+            if evidence:
+                cited = [(e.position, e.residue) for e in evidence]
+                ann.checks.append(residues_check(q.sequence, cited, "evidence_residues_match_sequence"))
     ann.confidence = confidence(ann)
     return parsed
 
 
 def finalize(triples: list[tuple[Question, Annotation, BaseModel | None]]) -> list[Annotation]:
     """Attach shuffled-control checks to the real answers and reset each record's confidence."""
-    shuffled = {(q.record.id, q.task.name): parsed for q, _, parsed in triples if q.condition == "shuffled"}
+
+    def key(q: Question) -> tuple[str, str, str]:
+        return q.record.id, q.task.name, json.dumps(q.params, sort_keys=True)
+
+    shuffled = {key(q): parsed for q, _, parsed in triples if q.condition == "shuffled"}
     out = []
     for q, ann, _ in triples:
-        key = (q.record.id, q.task.name)
-        if q.condition == "real" and key in shuffled and ann.answer is not None:
+        if q.condition == "real" and key(q) in shuffled and ann.answer is not None:
             ann.checks = [c for c in ann.checks if c.name != "shuffled_control"]
-            ann.checks.append(control_check(shuffled[key]))
+            ann.checks.append(control_check(q.task.control_signal, shuffled[key(q)]))
         ann.confidence = confidence(ann)
         out.append(ann)
     return out
@@ -160,6 +246,10 @@ def finalize(triples: list[tuple[Question, Annotation, BaseModel | None]]) -> li
 
 class Annotator:
     """Ask a provider every task for every sequence, reusing stored answers, with optional shuffled controls.
+
+    ``context`` sets how much of each FASTA header the model sees (see ``peptalk.templates.CONTEXTS``).
+    ``effort`` None uses each template's default. ``structured`` asks the provider to constrain the reply to the
+    template's JSON Schema; off by default, since it changes the protocol and differs by provider.
 
     With ``verify_input`` (the default) each prompt's input tokens are counted by the provider's counting endpoint
     before the call, and the record gets an ``input_tokens_match`` check: the call's reported input must equal
@@ -170,12 +260,15 @@ class Annotator:
         self,
         provider: Provider,
         model: str,
-        effort: str = "high",
+        effort: str | None = None,
         store: Store | None = None,
         prices: dict[str, Price] | None = None,
         concurrency: int = 4,
         verify_input: bool = True,
         reuse: bool = True,
+        context: str = DEFAULT_CONTEXT,
+        structured: bool = False,
+        payload: Sequence[str] = (),
     ):
         self.provider = provider
         self.model = model
@@ -185,12 +278,21 @@ class Annotator:
         self.concurrency = concurrency
         self.verify_input = verify_input
         self.reuse = reuse
+        self.context = context
+        self.structured = structured
+        self.payload = canonical_payload(payload)
+
+    def effort_for(self, q: Question) -> str:
+        return self.effort or q.task.default_effort
+
+    def new(self, q: Question) -> Annotation:
+        return new_annotation(q, self.provider, self.model, self.effort_for(q), self.structured)
 
     def stored(self, q: Question) -> Annotation | None:
         """A stored answer to reuse for this question, or None."""
         if self.store is None or not self.reuse:
             return None
-        hit = self.store.lookup(new_annotation(q, self.provider, self.model, self.effort))
+        hit = self.store.lookup(self.new(q))
         if hit is None:
             return None
         return hit.model_copy(update={"id": q.record.id, "description": q.record.description, "cached": True})
@@ -200,13 +302,14 @@ class Annotator:
         if hit is not None:
             # re-parse and re-check with the current code; the stored call keeps its uid, cost and timestamps
             return q, hit, fill(hit, q, hit.completion(), price_for(hit.model, self.prices))
-        ann = new_annotation(q, self.provider, self.model, self.effort)
+        ann = self.new(q)
+        schema = q.task.json_schema() if self.structured else None
         t0 = time.monotonic()
         completion: Completion | None = None
         try:
             if self.verify_input:
-                ann.expected_input_tokens = self.provider.count_tokens(q.prompt, self.model)
-            completion = self.provider.complete(q.prompt, self.model, self.effort)
+                ann.expected_input_tokens = self.provider.count_tokens(q.prompt, self.model, schema)
+            completion = self.provider.complete(q.prompt, self.model, ann.effort, schema)
         except ProviderError as e:
             ann.error = str(e)
         ann.finished_at = now()
@@ -222,9 +325,24 @@ class Annotator:
         tasks: Sequence[str],
         shuffle_control: bool = False,
         progress: Callable[[Annotation], None] | None = None,
+        params: dict[str, str] | None = None,
     ) -> list[Annotation]:
-        """Annotate records; results come back in question order."""
-        questions = build_questions(records, tasks, shuffle_control)
+        """Annotate records; results come back in question order. ``params`` fill an ask template's placeholders."""
+        questions = build_questions(records, tasks, shuffle_control, self.context, params, self.payload)
+        return self.run(questions, progress)
+
+    def check_claims(
+        self,
+        records: Iterable[SequenceRecord],
+        claims: Iterable[Claim],
+        shuffle_control: bool = False,
+        progress: Callable[[Annotation], None] | None = None,
+    ) -> list[Annotation]:
+        """Ask one question per claim (ask templates); results in claim order."""
+        return self.run(claim_questions(records, claims, shuffle_control, self.context, self.payload), progress)
+
+    def run(self, questions: list[Question], progress: Callable[[Annotation], None] | None = None) -> list[Annotation]:
+        """Ask prepared questions."""
         triples = []
         with ThreadPoolExecutor(self.concurrency) as ex:
             for triple in ex.map(self.ask, questions):

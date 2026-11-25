@@ -1,0 +1,4 @@
+Below is a protein sequence in one-letter amino acid codes. {{Basis}}, describe its function. Reply with a single JSON object and nothing else, with these keys: "protein_name": string; "family": string; "summary": one or two sentences on what the protein does; "molecular_function", "biological_process", "cellular_component": each a list of {"id": "GO:xxxxxxx", "label": Gene Ontology term name}; "ec_number": string or null; "recognised": true if you recognise this as a specific known protein, else false. Do not guess identifiers you are not confident of: leave a field empty or null instead.{{payload}}
+
+>{{header}}
+{{sequence}}

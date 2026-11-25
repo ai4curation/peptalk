@@ -89,7 +89,7 @@ def test_batch_round_trip():
         batches=NS(create=lambda **kw: batch, retrieve=lambda bid: batch),
     )
     p = OpenAIProvider(client=c)
-    assert p.submit_batch([("a", "PA"), ("b", "PB")], "gpt-6", "high") == "batch_1"
+    assert p.submit_batch([("a", "PA", None), ("b", "PB", None)], "gpt-6", "high") == "batch_1"
     assert uploaded["lines"][0] == {
         "custom_id": "a",
         "method": "POST",

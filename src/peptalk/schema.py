@@ -1,10 +1,12 @@
-"""Pydantic models for the answers each task asks for, and for the annotation records the tool writes.
+"""Records the tool writes, and the building blocks task answer models are made from.
 
-Answer models are lenient: models sometimes add keys or leave fields out, so extra keys are kept and every
-field has a default. Validation still catches wrong types (a string where a list of ranges belongs).
+Each task's own answer model lives with its template (``peptalk.templates``). Answer models derive from
+:class:`AnswerModel`, which is lenient: models sometimes add keys or leave fields out, so extra keys are kept and
+every field has a default. Validation still catches wrong types (a string where a list of ranges belongs).
 
->>> FeaturesAnswer.model_validate({"pfam_domains": [{"accession": "PF00069", "name": "Pkinase",
-...     "start": 10, "end": 270}], "signal_peptide": False}).pfam_domains[0].end
+>>> class Example(AnswerModel):
+...     pfam_domains: list[PfamDomain] = []
+>>> Example.model_validate({"pfam_domains": [{"accession": "PF00069", "start": 10, "end": 270}], "x": 1}).pfam_domains[0].end
 270
 """
 
@@ -15,109 +17,77 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 
-class _Lenient(BaseModel):
+class Evidence(BaseModel):
     model_config = ConfigDict(extra="allow")
+
+    position: int | None = None
+    residue: str | None = None
+    note: str | None = None
+
+
+class Alternative(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    answer: str | None = None
+    why_not: str | None = None
+
+
+class AnswerModel(BaseModel):
+    """Base for task answers: extra keys allowed, every field optional.
+
+    The last four fields are the optional payload (``peptalk.templates.PAYLOADS``), present only when asked for.
+    """
+
+    model_config = ConfigDict(extra="allow")
+
+    confidence: float | None = Field(default=None, ge=0, le=1)
+    rationale: str | None = None
+    evidence: list[Evidence] = Field(default_factory=list)
+    alternatives: list[Alternative] = Field(default_factory=list)
 
 
 Range = tuple[int, int]
 
 
-class PfamDomain(_Lenient):
+class PfamDomain(AnswerModel):
     accession: str | None = None
     name: str | None = None
     start: int | None = None
     end: int | None = None
 
 
-class FeaturesAnswer(_Lenient):
-    """Answer to the ``features`` task (the fs2f FEAT prompt)."""
-
-    pfam_domains: list[PfamDomain] = Field(default_factory=list)
-    transmembrane_helices: list[Range] = Field(default_factory=list)
-    signal_peptide: bool | None = None
-    protein_name: str | None = None
-    ec_number: str | None = None
-    function: str | None = None
-
-
-class CatalyticResidue(_Lenient):
+class CatalyticResidue(AnswerModel):
     role: str | None = None
     residue: str | None = None
     position: int | None = None
 
 
-class SubstitutedResidue(_Lenient):
+class SubstitutedResidue(AnswerModel):
     role: str | None = None
     expected: str | None = None
     found: str | None = None
     position: int | None = None
 
 
-class ActiveSiteAnswer(_Lenient):
-    """Answer to the ``active-site`` task (the fs2f PSEUDO prompt)."""
-
-    protein_name: str | None = None
-    enzyme_family: str | None = None
-    catalytic_residues: list[CatalyticResidue] = Field(default_factory=list)
-    substituted_or_missing: list[SubstitutedResidue] = Field(default_factory=list)
-    catalytically_active: Literal["yes", "no", "uncertain"] | None = None
-    ec_number: str | None = None
-    reason: str | None = None
-
-
-class FunctionalResidue(_Lenient):
+class FunctionalResidue(AnswerModel):
     position: int | None = None
     residue: str | None = None
     role: str | None = None
 
 
-class StructureAnswer(_Lenient):
-    """Answer to the ``structure`` task (the fs2f STRFN prompt)."""
-
-    helices: list[Range] = Field(default_factory=list)
-    strands: list[Range] = Field(default_factory=list)
-    fold: str | None = None
-    contacts: list[Range] = Field(default_factory=list)
-    protein_name: str | None = None
-    function: str | None = None
-    functional_residues: list[FunctionalResidue] = Field(default_factory=list)
-    recognised: bool | None = None
-
-
-class GoTerm(_Lenient):
+class GoTerm(AnswerModel):
     id: str | None = None
     label: str | None = None
 
 
-class FunctionAnswer(_Lenient):
-    """Answer to the ``function`` task (new here; not one of the fs2f tests)."""
+class Feature(BaseModel):
+    """A located feature of an answer, for GFF3: a 1-based inclusive range and a Sequence Ontology type name."""
 
-    protein_name: str | None = None
-    family: str | None = None
-    summary: str | None = None
-    molecular_function: list[GoTerm] = Field(default_factory=list)
-    biological_process: list[GoTerm] = Field(default_factory=list)
-    cellular_component: list[GoTerm] = Field(default_factory=list)
-    ec_number: str | None = None
-    recognised: bool | None = None
-
-
-class CombinedAnswer(_Lenient):
-    """Answer to the ``combined`` task (the merged reader prompt of protein-function-agent; not tested in fs2f)."""
-
-    protein_name: str | None = None
-    function: str | None = None
-    ec_number: str | None = None
-    enzyme_family: str | None = None
-    fold: str | None = None
-    pfam_domains: list[PfamDomain] = Field(default_factory=list)
-    transmembrane_helices: list[Range] = Field(default_factory=list)
-    signal_peptide: bool | None = None
-    catalytic_residues: list[CatalyticResidue] = Field(default_factory=list)
-    substituted_or_missing: list[SubstitutedResidue] = Field(default_factory=list)
-    catalytically_active: Literal["yes", "no", "uncertain"] | None = None
-    recognised: bool | None = None
-    reason: str | None = None
+    type: str
+    start: int
+    end: int
+    name: str | None = None
+    attributes: dict[str, str] = Field(default_factory=dict)
 
 
 class Usage(BaseModel):
@@ -179,6 +149,11 @@ class Annotation(BaseModel):
     response_id: str | None = None
     prompt_version: str
     prompt_sha256: str
+    context: str = "blind"
+    output: Literal["text", "json_schema"] = "text"
+    params: dict[str, str] = Field(default_factory=dict)
+    payload: list[str] = Field(default_factory=list)
+    header: dict[str, str] = Field(default_factory=dict)
     text: str | None = None
     answer: dict[str, Any] | None = None
     validation_error: str | None = None

@@ -1,0 +1,4 @@
+Below is a protein sequence in one-letter amino acid codes. {{Basis}}, decide whether the protein is likely to be catalytically active. Reply with a single JSON object and nothing else, with these keys: "protein_name": string; "enzyme_family": string; "catalytic_residues": list of {"role": string, "residue": one-letter code actually present in this sequence, "position": int (1-based)}; "substituted_or_missing": list of {"role": string, "expected": string, "found": string, "position": int or null} for any canonical catalytic or cofactor-binding residue that this sequence lacks (empty list if none); "catalytically_active": "yes", "no" or "uncertain"; "ec_number": string or null; "reason": one or two sentences.{{payload}}
+
+>{{header}}
+{{sequence}}

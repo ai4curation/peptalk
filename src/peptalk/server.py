@@ -27,15 +27,16 @@ from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel, Field, model_validator
 
 from peptalk import __version__, batch
-from peptalk.annotator import Annotator, build_questions, new_annotation
+from peptalk.annotator import Annotator, Question, build_questions, new_annotation
 from peptalk.fasta import SequenceRecord, clean_sequence, parse_fasta
+from peptalk.headers import PROFILES
 from peptalk.pricing import PRICES, Price
 from peptalk.providers import PROVIDERS, installed, provider_for
 from peptalk.providers.base import Provider
 from peptalk.report import totals
 from peptalk.schema import Annotation
 from peptalk.store import Store
-from peptalk.tasks import TASKS
+from peptalk.templates import CONTEXTS, DEFAULT_CONTEXT, PAYLOADS, TEMPLATES
 
 DEFAULT_MODEL = "claude-fable-5-2"
 DEFAULT_EFFORT = "high"
@@ -54,31 +55,46 @@ class AnnotateRequest(BaseModel):
 
     sequences: list[SequenceIn] = Field(default_factory=list)
     fasta: str | None = Field(default=None, description="FASTA text, as an alternative to `sequences`.")
-    tasks: list[str] = Field(default=["features"], description=f"Any of: {', '.join(TASKS)}.")
+    tasks: list[str] = Field(default=["features"], description=f"Any of: {', '.join(TEMPLATES)}.")
     model: str = DEFAULT_MODEL
     effort: str = DEFAULT_EFFORT
     provider: str | None = Field(
         default=None, description=f"One of {', '.join(PROVIDERS)}; default from the model name."
     )
+    context: str = Field(default=DEFAULT_CONTEXT, description="; ".join(f"{k}: {v}" for k, v in CONTEXTS.items()))
+    header_profile: str = Field(default="auto", description=f"FASTA header profile: auto, {', '.join(PROFILES)}.")
+    params: dict[str, str] = Field(default_factory=dict, description="Placeholders of an ask-* template.")
+    payload: list[str] = Field(default_factory=list, description=f"Extra answer keys: {', '.join(PAYLOADS)}.")
+    structured: bool = Field(default=False, description="Constrain replies to the task's JSON Schema (opt-in).")
     shuffle_control: bool = False
     reuse: bool = Field(default=True, description="Reuse stored answers instead of asking again.")
     verify_input: bool = Field(default=True, description="Check that each call sent nothing besides the prompt.")
 
     @model_validator(mode="after")
     def _check(self) -> AnnotateRequest:
-        bad = [t for t in self.tasks if t not in TASKS]
+        bad = [t for t in self.tasks if t not in TEMPLATES]
         if bad:
-            raise ValueError(f"unknown task(s) {', '.join(bad)}; choose from {', '.join(TASKS)}")
+            raise ValueError(f"unknown task(s) {', '.join(bad)}; choose from {', '.join(TEMPLATES)}")
         if not self.sequences and not self.fasta:
             raise ValueError("give `sequences` or `fasta`")
+        if self.context not in CONTEXTS:
+            raise ValueError(f"unknown context {self.context!r}; choose from {', '.join(CONTEXTS)}")
+        bad = [p for p in self.payload if p not in PAYLOADS]
+        if bad:
+            raise ValueError(f"unknown payload {', '.join(bad)}; choose from {', '.join(PAYLOADS)}")
         return self
+
+    def questions(self) -> list[Question]:
+        return build_questions(
+            self.records(), self.tasks, self.shuffle_control, self.context, self.params, self.payload
+        )
 
     def records(self) -> list[SequenceRecord]:
         recs = [
             SequenceRecord(id=s.id, description=s.description, sequence=clean_sequence(s.sequence))
             for s in self.sequences
         ]
-        return recs + (parse_fasta(self.fasta) if self.fasta else [])
+        return recs + (parse_fasta(self.fasta, self.header_profile) if self.fasta else [])
 
 
 class JobRequest(AnnotateRequest):
@@ -142,7 +158,16 @@ def create_app(
 
     def annotator(req: AnnotateRequest, provider: Provider) -> Annotator:
         return Annotator(
-            provider, req.model, req.effort, store=store, prices=prices, verify_input=req.verify_input, reuse=req.reuse
+            provider,
+            req.model,
+            req.effort,
+            store=store,
+            prices=prices,
+            verify_input=req.verify_input,
+            reuse=req.reuse,
+            context=req.context,
+            structured=req.structured,
+            payload=req.payload,
         )
 
     def save(job: Job, request: JobRequest, manifest: str | None = None, uids: list[str] | None = None) -> None:
@@ -171,7 +196,7 @@ def create_app(
     def run_live(job: Job, request: JobRequest, provider: Provider, recs: list[SequenceRecord]) -> None:
         job.status = "running"
         save(job, request)
-        out = annotator(request, provider).annotate(recs, request.tasks, request.shuffle_control)
+        out = annotator(request, provider).run(request.questions())
         job.status = "done"
         save(job, request, uids=[a.uid for a in out])
 
@@ -195,10 +220,17 @@ def create_app(
         }
 
     @app.get("/tasks", summary="Tasks and their prompt versions")
-    def tasks() -> list[dict[str, str]]:
+    def tasks() -> list[dict[str, Any]]:
         return [
-            {"name": t.name, "version": t.version, "source": t.source, "summary": t.summary} for t in TASKS.values()
+            {"name": t.name, "version": t.version, "source": t.source, "summary": t.summary, "params": t.params}
+            for t in TEMPLATES.values()
         ]
+
+    @app.get("/tasks/{name}/schema", summary="JSON Schema of a task's answer")
+    def task_schema(name: str) -> dict[str, Any]:
+        if name not in TEMPLATES:
+            raise HTTPException(404, f"no task {name}")
+        return TEMPLATES[name].json_schema()
 
     @app.post("/annotate", response_model=AnnotateResponse, summary="Annotate a few sequences and wait")
     def annotate(req: AnnotateRequest) -> AnnotateResponse:
@@ -206,14 +238,21 @@ def create_app(
         n = len(recs) * len(req.tasks) * (2 if req.shuffle_control else 1)
         if n > max_sync_questions:
             raise HTTPException(413, f"{n} questions; at most {max_sync_questions} here. POST /jobs instead.")
-        out = annotator(req, make_provider(req)).annotate(recs, req.tasks, req.shuffle_control)
+        try:
+            questions = req.questions()
+        except ValueError as e:
+            raise HTTPException(422, str(e)) from e
+        out = annotator(req, make_provider(req)).run(questions)
         return AnnotateResponse(annotations=out, totals=totals(out))
 
     @app.post("/jobs", response_model=Job, status_code=202, summary="Start a background or batch job")
     def start_job(req: JobRequest) -> Job:
         recs = records_of(req)
         provider = make_provider(req)
-        questions = build_questions(recs, req.tasks, req.shuffle_control)
+        try:
+            questions = req.questions()
+        except ValueError as e:
+            raise HTTPException(422, str(e)) from e
         job = Job(
             job_id=uuid.uuid4().hex,
             kind=req.mode,
@@ -230,7 +269,9 @@ def create_app(
         reused: list[str] = []
         todo = []
         for q in questions:
-            hit = store.lookup(new_annotation(q, provider, req.model, req.effort)) if req.reuse else None
+            hit = (
+                store.lookup(new_annotation(q, provider, req.model, req.effort, req.structured)) if req.reuse else None
+            )
             if hit is None:
                 todo.append(q)
             else:
@@ -239,7 +280,9 @@ def create_app(
             job.status = "done"
             save(job, req, uids=reused)
             return job
-        m = batch.submit(provider, todo, req.model, req.effort, verify_input=req.verify_input)
+        m = batch.submit(
+            provider, todo, req.model, req.effort, verify_input=req.verify_input, structured=req.structured
+        )
         job.status, job.batch_id = "submitted", m.batch_id
         save(job, req, manifest=m.model_dump_json(), uids=reused)
         return job
@@ -258,7 +301,7 @@ def create_app(
                 uids += [a.uid for a in out]
                 job.status = "done"
                 save(job, request, manifest=row["manifest"], uids=uids)
-        job.questions = len(build_questions(request.records(), request.tasks, request.shuffle_control))
+        job.questions = len(request.questions())
         if job.status == "done":
             job.annotations = store.by_uids(uids)
         return job

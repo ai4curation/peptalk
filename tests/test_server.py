@@ -110,7 +110,7 @@ def test_unknown_job(client):
 
 def test_live_job_failure_is_recorded(tmp_path):
     class Broken(StubProvider):
-        def complete(self, prompt, model, effort):
+        def complete(self, prompt, model, effort, schema=None):
             raise RuntimeError("disk full")
 
     app = create_app(Store(tmp_path / "s.db"), provider_factory=lambda m, p: Broken())
@@ -122,3 +122,27 @@ def test_live_job_failure_is_recorded(tmp_path):
                 break
             time.sleep(0.02)
     assert job["status"] == "failed" and "disk full" in job["error"]
+
+
+def test_context_payload_params_and_schema(client):
+    r = client.post(
+        "/annotate",
+        json={
+            "fasta": ">sp|P0A7B8|HSLV_ECOLI HslV OS=Escherichia coli OX=83333\nTTIVSVRR\n",
+            "tasks": ["ask-localization"],
+            "params": {"compartment": "cytoplasm"},
+            "context": "organism",
+            "payload": ["confidence"],
+            "model": "stub",
+        },
+    )
+    assert r.status_code == 200, r.text
+    a = r.json()["annotations"][0]
+    assert a["context"] == "organism" and a["params"] == {"compartment": "cytoplasm"} and a["payload"] == ["confidence"]
+    assert a["header"]["accession"] == "P0A7B8" and a["answer"]["confidence"] == 0.5
+    assert (
+        client.post("/annotate", json={"fasta": ">x\nMK\n", "tasks": ["ask-localization"], "model": "stub"}).status_code
+        == 422
+    )
+    assert client.get("/tasks/ask-function/schema").json()["properties"]["verdict"]
+    assert client.get("/tasks/nope/schema").status_code == 404

@@ -11,10 +11,10 @@ class FakeBatchProvider:
     def __init__(self, reply):
         self.reply = reply
 
-    def request_options(self, model, effort):
+    def request_options(self, model, effort, schema=None):
         return {"effort": effort}
 
-    def count_tokens(self, prompt, model):
+    def count_tokens(self, prompt, model, schema=None):
         return 900
 
     def submit_batch(self, items, model, effort):

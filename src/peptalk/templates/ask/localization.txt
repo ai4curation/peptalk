@@ -1,0 +1,4 @@
+Below is a protein sequence in one-letter amino acid codes. {{Basis}}, decide whether this protein is located in the {{compartment}}. Reply with a single JSON object and nothing else, with these keys: "verdict": "yes", "no" or "uncertain"; "reason": one or two sentences.{{payload}}
+
+>{{header}}
+{{sequence}}
