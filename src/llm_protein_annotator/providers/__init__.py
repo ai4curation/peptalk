@@ -57,4 +57,36 @@ def get_provider(name: str, **options: Any) -> Provider:
     raise ValueError(f"unknown provider {name!r}; choose from {', '.join(PROVIDERS)}")
 
 
-__all__ = ["PROVIDERS", "Provider", "ProviderError", "get_provider", "provider_for_model", "require_extra"]
+def provider_for(model: str, provider: str | None = None, fallback: bool = False, max_tokens: int = 64_000) -> Provider:
+    """The provider for a model: named, or guessed from the model name. Anthropic options apply to Anthropic only.
+
+    >>> provider_for("stub", "stub").name
+    'stub'
+    """
+    name = provider or provider_for_model(model)
+    options: dict[str, Any] = {"fallback": fallback, "max_tokens": max_tokens} if name == "anthropic" else {}
+    return get_provider(name, **options)
+
+
+def installed() -> dict[str, bool]:
+    """Which providers can be used here (their SDK is installed).
+
+    >>> installed()["anthropic"], installed()["stub"]
+    (True, True)
+    """
+    return {
+        name: EXTRAS.get(name) is None or importlib.util.find_spec(EXTRAS[name].split(".")[0]) is not None
+        for name in PROVIDERS
+    }
+
+
+__all__ = [
+    "PROVIDERS",
+    "Provider",
+    "ProviderError",
+    "get_provider",
+    "installed",
+    "provider_for",
+    "provider_for_model",
+    "require_extra",
+]

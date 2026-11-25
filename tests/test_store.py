@@ -49,3 +49,22 @@ def test_annotated_fasta(filled, records):
 def test_bad_key():
     with pytest.raises(ValueError, match="unknown cache-key"):
         Store(":memory:", key=["seq_md5", "task", "colour"])
+
+
+def test_parquet_and_duckdb(tmp_path, filled):
+    duckdb = pytest.importorskip("duckdb")
+    from llm_protein_annotator.exchange import to_parquet
+
+    records = list(filled.records())
+    path = tmp_path / "calls.parquet"
+    assert to_parquet(records + records, path) == 12  # deduplicated by uid
+    con = duckdb.connect()
+    n, md5s = con.execute(f"SELECT count(*), count(DISTINCT seq_md5) FROM '{path}' WHERE condition = 'real'").fetchone()
+    assert (n, md5s) == (6, 3)
+    con.execute("INSTALL sqlite; LOAD sqlite;")
+    con.execute(f"ATTACH '{filled.path}' AS lpa (TYPE sqlite, READ_ONLY)")
+    assert con.execute("SELECT count(*) FROM lpa.calls").fetchone()[0] == 12
+    joined = con.execute(
+        f"SELECT count(*) FROM lpa.calls c JOIN '{path}' p USING (uid) WHERE json_extract_string(c.record, '$.seq_md5') = p.seq_md5"
+    ).fetchone()[0]
+    assert joined == 12

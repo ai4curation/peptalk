@@ -30,6 +30,14 @@ gemini = [
 openai = [
     "openai>=3.59.0",
 ]
+server = [
+    "fastapi>=0.165.0",
+    "uvicorn>=0.54.0",
+]
+parquet = [
+    "pyarrow>=26.0.1",
+]
+all = ["llm-protein-annotator[gemini,openai,server,parquet]"]
 
 [project.scripts]
 lpa = "llm_protein_annotator.cli:app"
@@ -45,6 +53,8 @@ build-backend = "uv_build"
 
 [dependency-groups]
 dev = [
+    "duckdb>=2.0.1",
+    "httpx>=0.28.1",
     "mypy>=2.4.1",
     "pytest>=9.2.0",
     "ruff>=0.17.6",

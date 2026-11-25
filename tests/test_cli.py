@@ -108,3 +108,16 @@ def test_missing_extra_is_explained(monkeypatch, db):
     monkeypatch.setattr(importlib.util, "find_spec", lambda n, *a: None if n == "google" else real(n, *a))
     result = runner.invoke(app, ["annotate", FASTA, "-m", "gemini-4-neon", "--db", db])
     assert result.exit_code != 0 and "llm-protein-annotator[gemini]" in result.output
+
+
+def test_export_parquet(tmp_path, db):
+    pytest.importorskip("pyarrow")
+    stub("annotate", FASTA, "--shuffle-control", "-q", db=db)
+    out = tmp_path / "calls.parquet"
+    assert "6 records written" in run("export", "--db", db, "--parquet", str(out)).stderr
+    import pyarrow.parquet as pq
+
+    table = pq.read_table(out)
+    assert table.num_rows == 6 and {"uid", "seq_md5", "sequence", "answer", "thinking_tokens"} <= set(
+        table.column_names
+    )

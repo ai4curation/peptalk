@@ -56,3 +56,67 @@ def annotated_fasta(records: Iterable[Annotation]) -> str:
         for md5, (seq, ids, tasks) in sorted(by_md5.items())
     ]
     return format_fasta(out)
+
+
+PARQUET_COLUMNS = [
+    "uid",
+    "seq_md5",
+    "sequence",
+    "sequence_length",
+    "id",
+    "description",
+    "task",
+    "condition",
+    "prompt_version",
+    "prompt_sha256",
+    "provider",
+    "model",
+    "served_model",
+    "effort",
+    "confidence",
+    "stop_reason",
+    "error",
+    "cost_usd",
+    "batch",
+    "batch_id",
+    "cached",
+    "started_at",
+    "finished_at",
+    "duration_ms",
+    "expected_input_tokens",
+    "annotator_version",
+    "client",
+]
+
+
+def to_parquet(records: Iterable[Annotation], path: Path | str) -> int:
+    """Write records to Parquet, one row per call (deduplicated by ``uid``); returns the row count.
+
+    Scalar fields become columns; tokens are flattened (``input_tokens``, ``output_tokens``, ``thinking_tokens``);
+    the answer, checks, options and reply text are kept as JSON strings. Needs ``llm-protein-annotator[parquet]``.
+    """
+    import json
+
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+
+    seen: dict[str, Annotation] = {}
+    for a in records:
+        seen.setdefault(a.uid, a)
+    rows = []
+    for a in seen.values():
+        d = a.model_dump()
+        row = {c: d[c] for c in PARQUET_COLUMNS}
+        row.update(
+            input_tokens=a.usage.input_tokens + a.usage.cache_read_input_tokens + a.usage.cache_creation_input_tokens,
+            output_tokens=a.usage.output_tokens,
+            thinking_tokens=a.usage.thinking_tokens,
+            protein_name=(a.answer or {}).get("protein_name"),
+            answer=json.dumps(a.answer) if a.answer is not None else None,
+            checks=json.dumps([c.model_dump() for c in a.checks]),
+            options=json.dumps(a.options, sort_keys=True),
+            text=a.text,
+        )
+        rows.append(row)
+    pq.write_table(pa.Table.from_pylist(rows), str(path))
+    return len(rows)

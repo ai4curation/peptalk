@@ -65,6 +65,17 @@ CREATE TABLE IF NOT EXISTS calls (
 );
 CREATE INDEX IF NOT EXISTS calls_key ON calls (seq_md5, task, prompt_version, model, effort);
 CREATE INDEX IF NOT EXISTS calls_started ON calls (started_at);
+CREATE TABLE IF NOT EXISTS jobs (
+    job_id TEXT PRIMARY KEY,
+    kind TEXT NOT NULL,
+    status TEXT NOT NULL,
+    request TEXT NOT NULL,
+    manifest TEXT,
+    uids TEXT NOT NULL DEFAULT '[]',
+    error TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
 """
 
 
@@ -187,6 +198,27 @@ class Store:
             rows = self._db.execute(sql, list(params)).fetchall()
         for (record,) in rows:
             yield Annotation.model_validate_json(record)
+
+    def by_uids(self, uids: Sequence[str]) -> list[Annotation]:
+        """Stored records for these call uids, in the order given (unknown uids are left out)."""
+        found = {a.uid: a for a in self.records(f"uid IN ({','.join('?' * len(uids))})", list(uids))} if uids else {}
+        return [found[u] for u in uids if u in found]
+
+    def save_job(self, job: dict) -> None:
+        """Insert or replace a job row (see the server's Job model)."""
+        cols = ("job_id", "kind", "status", "request", "manifest", "uids", "error", "created_at", "updated_at")
+        with self._lock, self._db:
+            self._db.execute(
+                f"INSERT OR REPLACE INTO jobs ({','.join(cols)}) VALUES ({','.join('?' * len(cols))})",
+                [job[c] for c in cols],
+            )
+
+    def load_job(self, job_id: str) -> dict | None:
+        with self._lock:
+            cur = self._db.execute("SELECT * FROM jobs WHERE job_id = ?", (job_id,))
+            row = cur.fetchone()
+            names = [d[0] for d in cur.description]
+        return dict(zip(names, row, strict=True)) if row else None
 
     def count(self) -> int:
         with self._lock:

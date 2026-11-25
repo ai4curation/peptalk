@@ -5,24 +5,38 @@ from __future__ import annotations
 import sys
 from enum import Enum
 from pathlib import Path
-from typing import Annotated, Any
+from typing import Annotated
 
 import typer
 
 from llm_protein_annotator import __version__
 from llm_protein_annotator.annotator import Annotator, build_questions, new_annotation
-from llm_protein_annotator.exchange import annotated_fasta, export_records, import_jsonl
+from llm_protein_annotator.exchange import annotated_fasta, export_records, import_jsonl, to_parquet
 from llm_protein_annotator.fasta import SequenceRecord, format_fasta, parse_fasta, shuffle_sequence
 from llm_protein_annotator.pricing import load_prices
-from llm_protein_annotator.providers import PROVIDERS, get_provider, provider_for_model
+from llm_protein_annotator.providers import PROVIDERS, provider_for
 from llm_protein_annotator.providers.base import Provider
 from llm_protein_annotator.report import dumps_json, read_jsonl, totals_line, write_jsonl, write_tsv
 from llm_protein_annotator.schema import Annotation
 from llm_protein_annotator.store import DEFAULT_KEY, KEY_FIELDS, Store, default_db_path
 from llm_protein_annotator.tasks import TASKS
 
+EPILOG = """Examples:
+
+  lpa annotate proteins.fasta -t features -t active-site --shuffle-control -o results.jsonl
+
+  lpa annotate - -m claude-opus-5-5 -f tsv < one.fasta
+
+  lpa batch submit proteins.fasta --manifest m.json   (then: lpa batch status m.json; lpa batch collect m.json)
+
+  lpa log      lpa export --parquet calls.parquet      lpa serve
+"""
+
 app = typer.Typer(
-    help="Annotate protein sequences with a frontier language model, from sequence alone.", no_args_is_help=True
+    help="Annotate protein sequences with a frontier language model, from sequence alone.",
+    epilog=EPILOG,
+    no_args_is_help=True,
+    rich_markup_mode="markdown",
 )
 batch_app = typer.Typer(help="Provider batch APIs: half price, results within 24 hours.", no_args_is_help=True)
 app.add_typer(batch_app, name="batch")
@@ -41,36 +55,81 @@ class Format(str, Enum):
 FastaArg = Annotated[Path, typer.Argument(help="FASTA file, or - for standard input.", allow_dash=True)]
 TaskOpt = Annotated[
     list[str] | None,
-    typer.Option("--task", "-t", help=f"Task to run; repeatable. One of: {', '.join(TASKS)} [default: features]."),
+    typer.Option(
+        "--task",
+        "-t",
+        help=f"Task to run; repeatable. One of: {', '.join(TASKS)} [default: features].",
+        rich_help_panel="Question",
+    ),
 ]
-ModelOpt = Annotated[str, typer.Option("--model", "-m", help="Model id, as the provider names it.")]
-EffortOpt = Annotated[str, typer.Option("--effort", "-e", help="Effort / thinking level (provider's own labels).")]
-ProviderOpt = Annotated[str | None, typer.Option(help=f"One of {', '.join(PROVIDERS)} [default: from the model name].")]
+ModelOpt = Annotated[
+    str, typer.Option("--model", "-m", help="Model id, as the provider names it.", rich_help_panel="Model")
+]
+EffortOpt = Annotated[
+    str,
+    typer.Option("--effort", "-e", help="Effort / thinking level (provider's own labels).", rich_help_panel="Model"),
+]
+ProviderOpt = Annotated[
+    str | None,
+    typer.Option(help=f"One of {', '.join(PROVIDERS)} [default: from the model name].", rich_help_panel="Model"),
+]
 ShuffleOpt = Annotated[
-    bool, typer.Option("--shuffle-control/--no-shuffle-control", help="Also ask each task of a shuffled copy.")
+    bool,
+    typer.Option(
+        "--shuffle-control/--no-shuffle-control",
+        help="Also ask each task of a shuffled copy.",
+        rich_help_panel="Question",
+    ),
 ]
 DbOpt = Annotated[
     Path | None,
-    typer.Option("--db", help="SQLite log and cache [default: ~/.local/share/llm-protein-annotator/lpa.db]."),
+    typer.Option(
+        "--db",
+        help="SQLite log and cache [default: ~/.local/share/llm-protein-annotator/lpa.db].",
+        rich_help_panel="Store, cache and cost",
+    ),
 ]
-ReuseOpt = Annotated[bool, typer.Option("--reuse/--no-reuse", help="Reuse a stored answer instead of asking again.")]
+ReuseOpt = Annotated[
+    bool,
+    typer.Option(
+        "--reuse/--no-reuse",
+        help="Reuse a stored answer instead of asking again.",
+        rich_help_panel="Store, cache and cost",
+    ),
+]
 KeyOpt = Annotated[
     str,
-    typer.Option(help=f"Comma-separated fields a stored answer must match to be reused; from {', '.join(KEY_FIELDS)}."),
+    typer.Option(
+        help=f"Comma-separated fields a stored answer must match to be reused; from {', '.join(KEY_FIELDS)}.",
+        rich_help_panel="Store, cache and cost",
+    ),
 ]
 VerifyOpt = Annotated[
     bool,
     typer.Option(
         "--verify-input/--no-verify-input",
         help="Count each prompt's tokens first and check the call sent nothing else.",
+        rich_help_panel="Model",
     ),
 ]
-PricesOpt = Annotated[Path | None, typer.Option(help="JSON file of extra prices per model ($ per million tokens).")]
-OutOpt = Annotated[Path | None, typer.Option("--output", "-o", help="Write here instead of standard output.")]
-FormatOpt = Annotated[
-    Format, typer.Option("--format", "-f", help="jsonl: one full record per line; tsv: a summary table.")
+PricesOpt = Annotated[
+    Path | None,
+    typer.Option(
+        help="JSON file of extra prices per model ($ per million tokens).", rich_help_panel="Store, cache and cost"
+    ),
 ]
-MaxTokensOpt = Annotated[int, typer.Option(help="Anthropic only: output limit per answer, thinking included.")]
+OutOpt = Annotated[
+    Path | None, typer.Option("--output", "-o", help="Write here instead of standard output.", rich_help_panel="Output")
+]
+FormatOpt = Annotated[
+    Format,
+    typer.Option(
+        "--format", "-f", help="jsonl: one full record per line; tsv: a summary table.", rich_help_panel="Output"
+    ),
+]
+MaxTokensOpt = Annotated[
+    int, typer.Option(help="Anthropic only: output limit per answer, thinking included.", rich_help_panel="Model")
+]
 
 
 def _read_records(fasta: Path) -> list[SequenceRecord]:
@@ -94,10 +153,8 @@ def _store(db: Path | None, key: str = DEFAULT_KEY_TEXT) -> Store:
 
 
 def _provider(name: str | None, model: str, fallback: bool = False, max_tokens: int = 64_000) -> Provider:
-    name = name or provider_for_model(model)
-    options: dict[str, Any] = {"fallback": fallback, "max_tokens": max_tokens} if name == "anthropic" else {}
     try:
-        return get_provider(name, **options)
+        return provider_for(model, name, fallback, max_tokens)
     except (ImportError, ValueError) as e:
         raise typer.BadParameter(str(e)) from e
 
@@ -140,17 +197,26 @@ def annotate(
     output: OutOpt = None,
     fmt: FormatOpt = Format.jsonl,
     db: DbOpt = None,
-    log: Annotated[bool, typer.Option("--log/--no-log", help="Log calls in the store (and reuse from it).")] = True,
+    log: Annotated[
+        bool,
+        typer.Option(
+            "--log/--no-log",
+            help="Log calls in the store (and reuse from it).",
+            rich_help_panel="Store, cache and cost",
+        ),
+    ] = True,
     reuse: ReuseOpt = True,
     cache_key: KeyOpt = DEFAULT_KEY_TEXT,
     verify_input: VerifyOpt = True,
     prices: PricesOpt = None,
-    concurrency: Annotated[int, typer.Option(help="Questions asked at once.")] = 4,
+    concurrency: Annotated[int, typer.Option(help="Questions asked at once.", rich_help_panel="Model")] = 4,
     fallback: Annotated[
-        bool, typer.Option(help="Anthropic only: let another model answer a declined request.")
+        bool, typer.Option(help="Anthropic only: let another model answer a declined request.", rich_help_panel="Model")
     ] = False,
     max_tokens: MaxTokensOpt = 64_000,
-    quiet: Annotated[bool, typer.Option("--quiet", "-q", help="No progress or totals on standard error.")] = False,
+    quiet: Annotated[
+        bool, typer.Option("--quiet", "-q", help="No progress or totals on standard error.", rich_help_panel="Output")
+    ] = False,
 ) -> None:
     """Annotate every sequence in a FASTA file. Each sequence is sent alone, headed '>sequence'."""
     records = _read_records(fasta)
@@ -213,10 +279,26 @@ def show_log(
 def export_cmd(
     db: DbOpt = None,
     output: OutOpt = None,
+    parquet: Annotated[
+        Path | None, typer.Option(help="Write Parquet here instead of JSONL (needs the 'parquet' extra).")
+    ] = None,
     real_only: Annotated[bool, typer.Option(help="Leave out the shuffled controls.")] = False,
 ) -> None:
-    """Write every logged call as JSONL, ready to merge with other people's exports."""
+    """Write every logged call, one record per call: JSONL (to merge with 'lpa import') or Parquet (to query).
+
+    Records carry the sequence, its MD5 (seq_md5) and the call's uid, so exports from different people
+    merge without duplicates.
+    """
     records = export_records(_store(db), real_only=real_only)
+    if parquet:
+        try:
+            n = to_parquet(records, parquet)
+        except ImportError as e:
+            raise typer.BadParameter(
+                "Parquet export needs pyarrow: pip install 'llm-protein-annotator[parquet]'"
+            ) from e
+        typer.echo(f"{n} records written to {parquet}", err=True)
+        return
     _write(records, Format.jsonl, output)
     typer.echo(f"{len(records)} records", err=True)
 
@@ -241,6 +323,29 @@ def fasta_cmd(db: DbOpt = None, output: OutOpt = None) -> None:
         output.write_text(text)
     else:
         typer.echo(text, nl=False)
+
+
+@app.command()
+def serve(
+    db: DbOpt = None,
+    host: Annotated[
+        str, typer.Option(help="Interface to listen on. The API has no authentication of its own.")
+    ] = "127.0.0.1",
+    port: Annotated[int, typer.Option(help="Port to listen on.")] = 8000,
+    max_sync: Annotated[
+        int, typer.Option(help="Most questions POST /annotate answers directly; more need /jobs.")
+    ] = 20,
+) -> None:
+    """Run the REST API (needs the 'server' extra). OpenAPI docs at http://HOST:PORT/docs."""
+    try:
+        import uvicorn
+
+        from llm_protein_annotator.server import create_app
+    except ImportError as e:
+        raise typer.BadParameter(
+            "the API needs FastAPI and uvicorn: pip install 'llm-protein-annotator[server]'"
+        ) from e
+    uvicorn.run(create_app(_store(db), max_sync_questions=max_sync), host=host, port=port)
 
 
 @app.command()
