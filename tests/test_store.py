@@ -68,3 +68,27 @@ def test_parquet_and_duckdb(tmp_path, filled):
         f"SELECT count(*) FROM peptalk.calls c JOIN '{path}' p USING (uid) WHERE json_extract_string(c.record, '$.seq_md5') = p.seq_md5"
     ).fetchone()[0]
     assert joined == 12
+
+
+@pytest.mark.parametrize("stop", ["max_tokens", "MAX_TOKENS", "max_output_tokens"])
+def test_truncated_replies_are_not_reused(stop):
+    from peptalk.schema import Annotation
+    from peptalk.store import usable
+
+    a = Annotation(
+        uid="u",
+        id="x",
+        task="features",
+        sequence="MK",
+        seq_md5="m",
+        sequence_length=2,
+        provider="p",
+        model="m",
+        effort="low",
+        prompt_version="v",
+        prompt_sha256="s",
+        started_at="t",
+        text="{",
+        stop_reason=stop,
+    )
+    assert not usable(a)
