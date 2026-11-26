@@ -112,10 +112,18 @@ marked `answer: true`. Commit both. `peptalk templates check PATH` fails if they
 repository, `just gen-schema` regenerates every template and the interchange formats, and the tests fail on any
 difference.
 
-Before a schema is sent as structured output, peptalk cleans it up deterministically and adapts it to each
-provider (`peptalk.structured`). Anthropic gets the SDK's transform, OpenAI the strict form (every property
-required, optional ones nullable), and Gemini the schema as it is. A test checks every template's schema against
-each provider's documented subset. `peptalk tasks --schema localization` prints the cleaned schema.
+Before a schema is sent as structured output (`--structured`), peptalk prepares it deterministically
+(`peptalk.structured`):
+
+- It drops LinkML's metadata, unused definitions, and payload keys the user did not ask for (`--with`).
+- **Anthropic** gets every property of a nested object required, which keeps it under Anthropic's limit on
+  optional properties, and then the SDK's transform.
+- **OpenAI** gets the strict form: every property required, optional ones nullable.
+- **Gemini** gets the schema as it is.
+
+A test checks every template's schema, with and without payload keys, against each provider's documented
+subset. In a live run every template passed on Claude Haiku 5.5 and Gemini 3.1 flash-lite. With structured
+output the whole reply is the answer object. `peptalk tasks --schema localization` prints the prepared schema.
 
 ## 5. Write the hooks
 

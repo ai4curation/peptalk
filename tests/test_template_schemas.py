@@ -8,7 +8,7 @@ from typer.testing import CliRunner
 
 from peptalk.cli import app
 from peptalk.structured import anthropic_problems, gemini_problems, openai_strict, openai_strict_problems
-from peptalk.templates import TEMPLATES
+from peptalk.templates import PAYLOADS, TEMPLATES
 
 TEMPLATE_DIR = Path(__file__).parent.parent / "src" / "peptalk" / "templates"
 SCHEMAS = sorted(TEMPLATE_DIR.glob("*/schema.yaml"))
@@ -39,9 +39,10 @@ def test_generated_models_need_only_pydantic(schema):
     assert imported <= {"__future__", "re", "sys", "datetime", "decimal", "enum", "typing", "pydantic"}, imported
 
 
+@pytest.mark.parametrize("payload", [(), tuple(PAYLOADS)], ids=["no-payload", "all-payload"])
 @pytest.mark.parametrize("name", sorted(TEMPLATES))
-def test_schema_fits_every_provider(name):
-    schema = TEMPLATES[name].json_schema()
+def test_schema_fits_every_provider(name, payload):
+    schema = TEMPLATES[name].json_schema(payload)
     assert schema["type"] == "object" and "metamodel_version" not in schema
     assert anthropic_problems(schema) == []
     assert openai_strict_problems(schema) == []
@@ -52,7 +53,8 @@ def test_schema_fits_every_provider(name):
 def test_schema_matches_the_answer_model(name):
     """The JSON Schema and the Pydantic model come from the same LinkML class: same top-level fields."""
     t = TEMPLATES[name]
-    assert set(t.json_schema()["properties"]) == set(t.answer_model.model_fields)
+    assert set(t.json_schema(PAYLOADS)["properties"]) == set(t.answer_model.model_fields)
+    assert not set(t.json_schema()["properties"]) & set(PAYLOADS), "payload keys are sent only when asked for"
 
 
 def test_openai_strict_keeps_types_and_marks_optional_fields_nullable():

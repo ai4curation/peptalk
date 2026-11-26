@@ -128,16 +128,30 @@ def now() -> str:
     return datetime.datetime.now(datetime.UTC).isoformat(timespec="milliseconds")
 
 
-def parse_answer(task: Template, text: str) -> tuple[BaseModel | None, dict | None, str | None]:
+def parse_answer(
+    task: Template, text: str, structured: bool = False
+) -> tuple[BaseModel | None, dict | None, str | None]:
     """The validated answer, the raw answer object, and any problem found.
+
+    In free text the answer is the last JSON object carrying at least two of the template's keys. With structured
+    output the reply is constrained to the schema, so the whole reply is the answer object, however few keys it has.
 
     >>> from peptalk.templates import TEMPLATES
     >>> parse_answer(TEMPLATES["features"], 'no json here')[2]
     'no answer object in reply'
+    >>> parse_answer(TEMPLATES["ask-function"], '{"verdict": "yes"}', structured=True)[1]
+    {'verdict': 'yes'}
     """
     if has_tool_call(text):
         return None, None, "reply contains a tool invocation"
-    raw = answer_object(text, task.keys)
+    if structured:
+        try:
+            whole = json.loads(text)
+        except ValueError:
+            whole = None
+        raw = whole if isinstance(whole, dict) else None
+    else:
+        raw = answer_object(text, task.keys)
     if raw is None:
         return None, None, "no answer object in reply"
     try:
@@ -167,7 +181,7 @@ def new_annotation(q: Question, provider: Provider, model: str, effort: str, str
         provider=provider.name,
         model=model,
         effort=effort,
-        options=provider.request_options(model, effort, q.task.json_schema() if structured else None),
+        options=provider.request_options(model, effort, q.task.json_schema(q.payload) if structured else None),
         client=provider.client_version,
         annotator_version=__version__,
         prompt_version=q.task.version,
@@ -188,7 +202,7 @@ def fill(ann: Annotation, q: Question, completion: Completion | None, price: Pri
     ann.checks = []
     parsed = None
     if completion is not None:
-        parsed, raw, problem = parse_answer(q.task, completion.text)
+        parsed, raw, problem = parse_answer(q.task, completion.text, structured=ann.output == "json_schema")
         ann.text = completion.text
         ann.answer = raw
         ann.validation_error = problem
@@ -290,7 +304,7 @@ class Annotator:
             # re-parse and re-check with the current code; the stored call keeps its uid, cost and timestamps
             return q, hit, fill(hit, q, hit.completion(), price_for(hit.model, self.prices))
         ann = self.new(q)
-        schema = q.task.json_schema() if self.structured else None
+        schema = q.task.json_schema(q.payload) if self.structured else None
         t0 = time.monotonic()
         completion: Completion | None = None
         try:

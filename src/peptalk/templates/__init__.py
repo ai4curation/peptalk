@@ -234,11 +234,12 @@ class Template:
             pos += len(segment)
         return True
 
-    def json_schema(self) -> dict[str, Any]:
-        """JSON Schema of the answer, for opt-in structured outputs and for documentation.
+    def json_schema(self, payload: Iterable[str] = ()) -> dict[str, Any]:
+        """JSON Schema of the answer, for opt-in structured output and for documentation.
 
         It is the ``<Class>.schema.json`` generated from the template's LinkML schema (next to the module that
-        defines the answer class), cleaned up by :func:`peptalk.structured.answer_schema`.
+        defines the answer class), cleaned up by :func:`peptalk.structured.answer_schema`. Payload keys appear only
+        if asked for: an unrequested rationale in a structured-output schema is still a request for one.
         """
         from peptalk.structured import answer_schema
 
@@ -248,7 +249,10 @@ class Template:
             raise FileNotFoundError(
                 f"{path} is missing: run `peptalk templates generate {path.parent / 'schema.yaml'}`"
             )
-        return answer_schema(json.loads(path.read_text()))
+        generated = json.loads(path.read_text())
+        unwanted = set(PAYLOADS) - set(payload)
+        generated["properties"] = {k: v for k, v in generated["properties"].items() if k not in unwanted}
+        return answer_schema(generated)
 
 
 TEMPLATES: dict[str, Template] = {}

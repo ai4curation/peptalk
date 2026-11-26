@@ -17,6 +17,7 @@ from anthropic.types.messages import MessageBatchSucceededResult
 
 from peptalk.providers.base import BatchStatus, ProviderError
 from peptalk.schema import Completion, Usage
+from peptalk.structured import anthropic_form
 
 DEFAULT_MAX_TOKENS = 64_000
 FALLBACK_BETA = "server-side-fallback-2026-07-01"
@@ -35,7 +36,7 @@ def request_params(
     """
     output_config: dict[str, Any] = {"effort": effort}
     if schema is not None:
-        output_config["format"] = {"type": "json_schema", "schema": anthropic.transform_schema(schema)}
+        output_config["format"] = {"type": "json_schema", "schema": anthropic.transform_schema(anthropic_form(schema))}
     return {
         "model": model,
         "max_tokens": max_tokens,

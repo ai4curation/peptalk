@@ -4,8 +4,9 @@ A template's answer JSON Schema is generated from its LinkML schema (``<Class>.s
 :func:`answer_schema` makes it a plain JSON Schema object: it drops LinkML's metadata keys, the definitions the
 answer does not use, and empty descriptions. Then each provider gets its own form:
 
-- **Anthropic:** the SDK's ``anthropic.transform_schema``, which closes objects and moves constraints it does not
-  enforce (minimum, minItems, ...) into descriptions.
+- **Anthropic:** :func:`anthropic_form` (nested objects' properties required, to stay under Anthropic's limit on
+  optional properties), then the SDK's ``anthropic.transform_schema``, which closes objects and moves constraints
+  it does not enforce (minimum, minItems, ...) into descriptions.
 - **OpenAI strict:** :func:`openai_strict`: every object closed, every property required, and properties that
   were optional made nullable.
 - **Gemini:** the schema as it is (``response_json_schema`` accepts this subset).
@@ -82,6 +83,24 @@ def answer_schema(generated: dict[str, Any]) -> dict[str, Any]:
     return _drop_empty_descriptions(schema)
 
 
+def anthropic_form(schema: dict[str, Any]) -> dict[str, Any]:
+    """The form sent to Anthropic before the SDK's transform: every property of a nested object required.
+
+    Anthropic rejects schemas with too many optional properties ("Schema is too complex"). Nested objects (a
+    domain, a residue) are small and whole, so requiring their properties keeps the top-level keys optional, as
+    the prompts have them, while staying under the limit.
+
+    >>> anthropic_form({"type": "object", "properties": {"d": {"$ref": "#/$defs/D"}},
+    ...                 "$defs": {"D": {"type": "object", "properties": {"a": {"type": "string"}}}}})["$defs"]["D"]
+    {'type': 'object', 'properties': {'a': {'type': 'string'}}, 'required': ['a']}
+    """
+    schema = copy.deepcopy(schema)
+    for definition in schema.get("$defs", {}).values():
+        if "properties" in definition:
+            definition["required"] = list(definition["properties"])
+    return schema
+
+
 def openai_strict(schema: dict[str, Any]) -> dict[str, Any]:
     """The form OpenAI strict mode requires: closed objects, all properties required, optional ones nullable."""
 
@@ -144,7 +163,7 @@ def anthropic_problems(schema: dict[str, Any]) -> list[str]:
     """Problems with the schema Anthropic receives (after the SDK's transform)."""
     import anthropic
 
-    sent = anthropic.transform_schema(schema)
+    sent = anthropic.transform_schema(anthropic_form(schema))
     problems = [f"unsupported keyword {k}" for k in sorted(_keywords(sent, set()) - ANTHROPIC_KEYWORDS)]
     problems += [
         f"object not closed: {sorted(o['properties'])}"

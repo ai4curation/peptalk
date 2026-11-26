@@ -151,7 +151,10 @@ The shared building blocks (payload keys, domains, residues, GO terms, `[start, 
 `src/peptalk/templates/common.yaml`. Plugins follow the same steps ([templates.md](templates.md)).
 
 Before an answer schema is sent as structured output it is cleaned up deterministically and adapted per provider
-(`peptalk.structured`): Anthropic's SDK transform, OpenAI's strict form, Gemini as is. A test checks every
+(`peptalk.structured`). Payload keys go in only when asked for. In the first live test, an Anthropic schema that
+always carried `rationale` and `alternatives` was refused (`refusal:reasoning_extraction`). Anthropic gets
+nested objects' properties required (it rejected `combined` as "too complex" otherwise) and then its SDK
+transform; OpenAI gets the strict form; Gemini gets the schema as is. A test checks every
 template's schema against each provider's documented subset. JSON Schemas are generated without explicit nulls,
 so an optional field is simply not required; the OpenAI strict form adds the nulls back, because strict mode
 requires every property.
