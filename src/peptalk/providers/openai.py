@@ -1,7 +1,8 @@
 """OpenAI models through the Responses API (``pip install 'peptalk-llm[openai]'``).
 
 The request carries only the prompt and a reasoning effort: no tools and no instructions. Batches use the OpenAI
-Batch API on the ``/v1/responses`` endpoint. This route was not tested in fs2f.
+Batch API on the ``/v1/responses`` endpoint. This route was not tested in fs2f; it has been run live (November 2026,
+GPT-6.2 Sol and Astra: the input-token check, every template in strict mode, and a batch).
 """
 
 from __future__ import annotations

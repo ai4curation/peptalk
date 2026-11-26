@@ -136,6 +136,8 @@ def test_ask_command(tmp_path, db):
     out = stub("ask", FASTA, "--claims", str(claims), "-w", "confidence", "-f", "tsv", "-q", db=db).stdout
     rows = [line.split("\t") for line in out.splitlines()[1:]]
     assert [r[1] for r in rows] == ["ask-catalytic-residue", "ask-function"]
+    out = stub("ask", FASTA, "--claims", str(claims), "--structured", "--concurrency", "1", "-q", db=db).stdout
+    assert all(json.loads(line)["options"]["format"] == "json_schema" for line in out.splitlines())
     bad = tmp_path / "bad.tsv"
     bad.write_text("id\ttask\nnope\task-function\n")
     assert runner.invoke(app, ["ask", FASTA, "--claims", str(bad), "--provider", "stub", "--db", db]).exit_code != 0

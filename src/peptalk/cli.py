@@ -120,6 +120,7 @@ PayloadOpt = Annotated[
         rich_help_panel="Question",
     ),
 ]
+ConcurrencyOpt = Annotated[int, typer.Option(help="Questions asked at once.", rich_help_panel="Model")]
 StructuredOpt = Annotated[
     bool,
     typer.Option(
@@ -296,7 +297,7 @@ def annotate(
     cache_key: KeyOpt = DEFAULT_KEY_TEXT,
     verify_input: VerifyOpt = True,
     prices: PricesOpt = None,
-    concurrency: Annotated[int, typer.Option(help="Questions asked at once.", rich_help_panel="Model")] = 4,
+    concurrency: ConcurrencyOpt = 4,
     fallback: Annotated[
         bool, typer.Option(help="Anthropic only: let another model answer a declined request.", rich_help_panel="Model")
     ] = False,
@@ -360,12 +361,14 @@ def ask(
     header_profile: ProfileOpt = "auto",
     payload: PayloadOpt = None,
     shuffle_control: ShuffleOpt = False,
+    structured: StructuredOpt = False,
     output: OutOpt = None,
     fmt: FormatOpt = Format.jsonl,
     db: DbOpt = None,
     reuse: ReuseOpt = True,
     verify_input: VerifyOpt = True,
     prices: PricesOpt = None,
+    concurrency: ConcurrencyOpt = 4,
     quiet: Annotated[
         bool, typer.Option("--quiet", "-q", help="No progress or totals on standard error.", rich_help_panel="Output")
     ] = False,
@@ -396,9 +399,11 @@ def ask(
         effort=effort,
         store=_store(db),
         prices=load_prices(prices) if prices else None,
+        concurrency=concurrency,
         verify_input=verify_input,
         reuse=reuse,
         context=_check_context(context),
+        structured=structured,
         payload=_payload(payload),
     )
     try:
