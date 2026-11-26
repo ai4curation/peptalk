@@ -1,0 +1,42 @@
+id: https://w3id.org/ai4curation/peptalk/templates/ask
+name: peptalk_ask
+title: Answer schema of the ask template
+license: MIT
+prefixes:
+  linkml: https://w3id.org/linkml/
+  peptalk: https://w3id.org/ai4curation/peptalk/
+default_prefix: peptalk
+default_range: string
+imports:
+  - linkml:types
+  - peptalk_common
+
+classes:
+  Verdict:
+    is_a: AnswerBase
+    annotations:
+      answer: true
+    description: A verdict on one claim.
+    attributes:
+      verdict:
+        range: YesNoUncertain
+      reason:
+        description: One or two sentences.
+  ResidueVerdict:
+    is_a: Verdict
+    annotations:
+      answer: true
+    description: A verdict on a claim about one residue.
+    attributes:
+      residue_found:
+        description: The one-letter code read at the position.
+  DomainVerdict:
+    is_a: Verdict
+    annotations:
+      answer: true
+    description: A verdict on a claim that a domain is present, with its boundaries.
+    attributes:
+      start:
+        range: integer
+      end:
+        range: integer

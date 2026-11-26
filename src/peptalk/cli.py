@@ -12,7 +12,8 @@ from typing import Annotated
 import typer
 
 from peptalk import __version__
-from peptalk.annotator import Annotator, build_questions, new_annotation, read_claims
+from peptalk.annotator import Annotator, build_questions, new_annotation
+from peptalk.claims import ClaimsError, read_claims
 from peptalk.exchange import annotated_fasta, export_records, import_jsonl, to_gff3, to_parquet
 from peptalk.fasta import SequenceRecord, format_fasta, parse_fasta, shuffle_sequence
 from peptalk.headers import PROFILES
@@ -22,7 +23,7 @@ from peptalk.providers.base import Provider
 from peptalk.report import dumps_json, read_jsonl, totals_line, write_jsonl, write_tsv
 from peptalk.schema import Annotation
 from peptalk.store import DEFAULT_KEY, KEY_FIELDS, Store, default_db_path
-from peptalk.templates import CONTEXTS, DEFAULT_CONTEXT, PAYLOADS, TEMPLATES
+from peptalk.templates import CONTEXTS, DEFAULT_CONTEXT, PAYLOADS, TEMPLATES, params_table
 
 EPILOG = """Examples:
 
@@ -43,6 +44,11 @@ app = typer.Typer(
 )
 batch_app = typer.Typer(help="Provider batch APIs: half price, results within 24 hours.", no_args_is_help=True)
 app.add_typer(batch_app, name="batch")
+templates_app = typer.Typer(
+    help="Template schemas: generate a template's Pydantic and JSON Schema from its LinkML schema.yaml.",
+    no_args_is_help=True,
+)
+app.add_typer(templates_app, name="templates")
 
 DEFAULT_MODEL = "claude-fable-5-2"
 DEFAULT_EFFORT = "high"
@@ -342,7 +348,10 @@ def ask(
     fasta: FastaArg,
     claims: Annotated[
         Path,
-        typer.Option(help="TSV of claims: columns id (FASTA id), task (an ask-* template) and its parameters."),
+        typer.Option(
+            help="Claims file: YAML (.yaml) to write by hand, or TSV/CSV for bulk input. See docs/claims.md; "
+            "'peptalk tasks --ask' lists the templates and their parameters."
+        ),
     ],
     model: ModelOpt = DEFAULT_MODEL,
     effort: EffortOpt = DEFAULT_EFFORT,
@@ -361,17 +370,26 @@ def ask(
         bool, typer.Option("--quiet", "-q", help="No progress or totals on standard error.", rich_help_panel="Output")
     ] = False,
 ) -> None:
-    """Check claims one at a time: each row of --claims is one yes/no/uncertain question about one sequence.
+    """Check specific claims, one per call: each claim gets a verdict (yes, no or uncertain).
 
-    Example claims.tsv (tab-separated; empty cells are fine):
+    Example (examples/claims.yaml in the repository):
 
-        id  task  term  label  position  residue
+        proteins:
+          - id: Q2PAY3_wt
+            claims:
+              - task: ask-catalytic-residue
+                params: {position: 436, residue: D}
+                expected: yes
 
-        Q2PAY3_wt  ask-catalytic-residue      436  D
-
-        Q2PAY3_wt  ask-function  GO:0004672  protein kinase activity
+    'expected' and 'note' are optional and never sent to the model; with 'expected', the totals report how many
+    verdicts agree.
     """
     records = _read_records(fasta, header_profile)
+    try:
+        claim_list = read_claims(claims)
+    except (ClaimsError, OSError) as e:
+        typer.echo(f"Error in claims file:\n{e}", err=True)
+        raise typer.Exit(2) from e
     annotator = Annotator(
         _provider(provider, model),
         model=model,
@@ -384,7 +402,7 @@ def ask(
         payload=_payload(payload),
     )
     try:
-        annotations = annotator.check_claims(records, read_claims(claims), shuffle_control, _progress(quiet))
+        annotations = annotator.check_claims(records, claim_list, shuffle_control, _progress(quiet))
     except (ValueError, KeyError) as e:
         raise typer.BadParameter(str(e)) from e
     _write(annotations, fmt, output)
@@ -505,6 +523,9 @@ def serve(
 def tasks(
     show: Annotated[str | None, typer.Option(help="Print the prompt template of this task.")] = None,
     schema: Annotated[str | None, typer.Option(help="Print the JSON Schema of this task's answer.")] = None,
+    ask: Annotated[
+        bool, typer.Option("--ask", help="Print the ask templates and their claims-file parameters.")
+    ] = False,
 ) -> None:
     """List the tasks (name, prompt version, source, summary), or print one task's prompt or answer schema."""
     if show:
@@ -513,8 +534,11 @@ def tasks(
     if schema:
         typer.echo(json.dumps(TEMPLATES[_check_tasks([schema])[0]].json_schema(), indent=2))
         return
+    if ask:
+        typer.echo(params_table())
+        return
     for t in TEMPLATES.values():
-        typer.echo(f"{t.name}\t{t.version}\t{t.source}\t{t.summary}")
+        typer.echo(f"{t.name}\t{t.version}\t{t.source}\t{t.summary}\t{','.join(t.params)}")
 
 
 @app.command()
@@ -536,6 +560,50 @@ def shuffle(fasta: FastaArg, output: OutOpt = None) -> None:
         output.write_text(text)
     else:
         typer.echo(text, nl=False)
+
+
+SchemaPathsArg = Annotated[
+    list[Path], typer.Argument(help="Template schema files (schema.yaml) or the folders that hold them.")
+]
+
+
+def _schema_files(paths: list[Path]) -> list[Path]:
+    files = [p / "schema.yaml" if p.is_dir() else p for p in paths]
+    missing = [str(f) for f in files if not f.exists()]
+    if missing:
+        raise typer.BadParameter(f"no such schema: {', '.join(missing)}")
+    return files
+
+
+def _codegen():  # type: ignore[no-untyped-def]
+    try:
+        import linkml  # noqa: F401
+    except ImportError as e:
+        raise typer.BadParameter("generating schemas needs LinkML: pip install 'peptalk-llm[linkml]'") from e
+    from peptalk import codegen
+
+    return codegen
+
+
+@templates_app.command("generate")
+def templates_generate(paths: SchemaPathsArg) -> None:
+    """Write schema.py (Pydantic) and <Class>.schema.json next to each template's LinkML schema.yaml."""
+    codegen = _codegen()
+    for f in _schema_files(paths):
+        for written in codegen.write(f):
+            typer.echo(f"wrote {written}", err=True)
+
+
+@templates_app.command("check")
+def templates_check(paths: SchemaPathsArg) -> None:
+    """Fail if any generated file is missing or differs from what its schema.yaml generates now."""
+    codegen = _codegen()
+    stale = [p for f in _schema_files(paths) for p in codegen.stale(f)]
+    for p in stale:
+        typer.echo(f"out of date: {p}", err=True)
+    if stale:
+        raise typer.Exit(1)
+    typer.echo("generated files are current", err=True)
 
 
 @batch_app.command("submit")

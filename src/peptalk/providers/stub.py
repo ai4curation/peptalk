@@ -3,10 +3,11 @@
 It answers every prompt with an empty answer object of the right shape, so a pipeline can be checked end to end
 without an API key or cost. Its "batches" finish at once.
 
+>>> import json
 >>> from peptalk.templates import PAYLOADS, TEMPLATES
 >>> p = StubProvider()
->>> p.complete(TEMPLATES["features"].render("MKT"), "stub", "low").text[:16]
-'{"pfam_domains":'
+>>> sorted(json.loads(p.complete(TEMPLATES["features"].render("MKT"), "stub", "low").text))[:2]
+['ec_number', 'function']
 >>> b = p.submit_batch([("q1", TEMPLATES["features"].render("MKT"), None)], "stub", "low")
 >>> p.batch_status(b).done, sorted(p.batch_results(b, ["q1"]))
 (True, ['q1'])

@@ -75,6 +75,8 @@ def test_every_template_renders_and_has_a_schema():
         "position": "3",
         "residue": "T",
         "compartment": "nucleus",
+        "accession": "PF00069",
+        "name": "Pkinase",
     }
     for t in TEMPLATES.values():
         prompt = t.render(

@@ -1,0 +1,347 @@
+{
+    "$defs": {
+        "Alternative": {
+            "additionalProperties": false,
+            "description": "",
+            "properties": {
+                "answer": {
+                    "type": "string"
+                },
+                "why_not": {
+                    "type": "string"
+                }
+            },
+            "title": "Alternative",
+            "type": "object"
+        },
+        "AnswerBase": {
+            "additionalProperties": false,
+            "description": "The optional payload keys every answer may carry when asked for.",
+            "properties": {
+                "alternatives": {
+                    "description": "Answers you considered and rejected.",
+                    "items": {
+                        "$ref": "#/$defs/Alternative"
+                    },
+                    "type": "array"
+                },
+                "confidence": {
+                    "description": "Your probability, from 0 to 1, that your main answer is correct.",
+                    "maximum": 1,
+                    "minimum": 0,
+                    "type": "number"
+                },
+                "evidence": {
+                    "description": "The residues your answer rests on.",
+                    "items": {
+                        "$ref": "#/$defs/Evidence"
+                    },
+                    "type": "array"
+                },
+                "rationale": {
+                    "description": "Two or three sentences on the features of the sequence that led to your answer.",
+                    "type": "string"
+                }
+            },
+            "title": "AnswerBase",
+            "type": "object"
+        },
+        "CatalyticResidue": {
+            "additionalProperties": false,
+            "description": "",
+            "properties": {
+                "position": {
+                    "description": "1-based residue position.",
+                    "type": "integer"
+                },
+                "residue": {
+                    "description": "One-letter code actually present in this sequence.",
+                    "type": "string"
+                },
+                "role": {
+                    "type": "string"
+                }
+            },
+            "title": "CatalyticResidue",
+            "type": "object"
+        },
+        "DomainVerdict": {
+            "additionalProperties": false,
+            "description": "A verdict on a claim that a domain is present, with its boundaries.",
+            "properties": {
+                "alternatives": {
+                    "description": "Answers you considered and rejected.",
+                    "items": {
+                        "$ref": "#/$defs/Alternative"
+                    },
+                    "type": "array"
+                },
+                "confidence": {
+                    "description": "Your probability, from 0 to 1, that your main answer is correct.",
+                    "maximum": 1,
+                    "minimum": 0,
+                    "type": "number"
+                },
+                "end": {
+                    "type": "integer"
+                },
+                "evidence": {
+                    "description": "The residues your answer rests on.",
+                    "items": {
+                        "$ref": "#/$defs/Evidence"
+                    },
+                    "type": "array"
+                },
+                "rationale": {
+                    "description": "Two or three sentences on the features of the sequence that led to your answer.",
+                    "type": "string"
+                },
+                "reason": {
+                    "description": "One or two sentences.",
+                    "type": "string"
+                },
+                "start": {
+                    "type": "integer"
+                },
+                "verdict": {
+                    "$ref": "#/$defs/YesNoUncertain"
+                }
+            },
+            "title": "DomainVerdict",
+            "type": "object"
+        },
+        "Evidence": {
+            "additionalProperties": false,
+            "description": "",
+            "properties": {
+                "note": {
+                    "type": "string"
+                },
+                "position": {
+                    "description": "1-based residue position.",
+                    "type": "integer"
+                },
+                "residue": {
+                    "description": "One-letter code.",
+                    "type": "string"
+                }
+            },
+            "title": "Evidence",
+            "type": "object"
+        },
+        "FunctionalResidue": {
+            "additionalProperties": false,
+            "description": "",
+            "properties": {
+                "position": {
+                    "type": "integer"
+                },
+                "residue": {
+                    "description": "One-letter code.",
+                    "type": "string"
+                },
+                "role": {
+                    "type": "string"
+                }
+            },
+            "title": "FunctionalResidue",
+            "type": "object"
+        },
+        "GoTerm": {
+            "additionalProperties": false,
+            "description": "",
+            "properties": {
+                "id": {
+                    "description": "GO term id, GO:xxxxxxx.",
+                    "type": "string"
+                },
+                "label": {
+                    "description": "GO term name.",
+                    "type": "string"
+                }
+            },
+            "title": "GoTerm",
+            "type": "object"
+        },
+        "PfamDomain": {
+            "additionalProperties": false,
+            "description": "",
+            "properties": {
+                "accession": {
+                    "description": "Pfam accession, PFxxxxx.",
+                    "type": "string"
+                },
+                "end": {
+                    "description": "Last residue (1-based).",
+                    "type": "integer"
+                },
+                "name": {
+                    "description": "Pfam short name.",
+                    "type": "string"
+                },
+                "start": {
+                    "description": "First residue (1-based).",
+                    "type": "integer"
+                }
+            },
+            "title": "PfamDomain",
+            "type": "object"
+        },
+        "ResidueVerdict": {
+            "additionalProperties": false,
+            "description": "A verdict on a claim about one residue.",
+            "properties": {
+                "alternatives": {
+                    "description": "Answers you considered and rejected.",
+                    "items": {
+                        "$ref": "#/$defs/Alternative"
+                    },
+                    "type": "array"
+                },
+                "confidence": {
+                    "description": "Your probability, from 0 to 1, that your main answer is correct.",
+                    "maximum": 1,
+                    "minimum": 0,
+                    "type": "number"
+                },
+                "evidence": {
+                    "description": "The residues your answer rests on.",
+                    "items": {
+                        "$ref": "#/$defs/Evidence"
+                    },
+                    "type": "array"
+                },
+                "rationale": {
+                    "description": "Two or three sentences on the features of the sequence that led to your answer.",
+                    "type": "string"
+                },
+                "reason": {
+                    "description": "One or two sentences.",
+                    "type": "string"
+                },
+                "residue_found": {
+                    "description": "The one-letter code read at the position.",
+                    "type": "string"
+                },
+                "verdict": {
+                    "$ref": "#/$defs/YesNoUncertain"
+                }
+            },
+            "title": "ResidueVerdict",
+            "type": "object"
+        },
+        "SubstitutedResidue": {
+            "additionalProperties": false,
+            "description": "",
+            "properties": {
+                "expected": {
+                    "description": "The canonical residue.",
+                    "type": "string"
+                },
+                "found": {
+                    "description": "The residue in this sequence.",
+                    "type": "string"
+                },
+                "position": {
+                    "type": "integer"
+                },
+                "role": {
+                    "type": "string"
+                }
+            },
+            "title": "SubstitutedResidue",
+            "type": "object"
+        },
+        "Verdict": {
+            "additionalProperties": false,
+            "description": "A verdict on one claim.",
+            "properties": {
+                "alternatives": {
+                    "description": "Answers you considered and rejected.",
+                    "items": {
+                        "$ref": "#/$defs/Alternative"
+                    },
+                    "type": "array"
+                },
+                "confidence": {
+                    "description": "Your probability, from 0 to 1, that your main answer is correct.",
+                    "maximum": 1,
+                    "minimum": 0,
+                    "type": "number"
+                },
+                "evidence": {
+                    "description": "The residues your answer rests on.",
+                    "items": {
+                        "$ref": "#/$defs/Evidence"
+                    },
+                    "type": "array"
+                },
+                "rationale": {
+                    "description": "Two or three sentences on the features of the sequence that led to your answer.",
+                    "type": "string"
+                },
+                "reason": {
+                    "description": "One or two sentences.",
+                    "type": "string"
+                },
+                "verdict": {
+                    "$ref": "#/$defs/YesNoUncertain"
+                }
+            },
+            "title": "Verdict",
+            "type": "object"
+        },
+        "YesNoUncertain": {
+            "description": "",
+            "enum": [
+                "yes",
+                "no",
+                "uncertain"
+            ],
+            "title": "YesNoUncertain",
+            "type": "string"
+        }
+    },
+    "$id": "https://w3id.org/ai4curation/peptalk/templates/ask",
+    "$schema": "https://json-schema.org/draft/2019-09/schema",
+    "additionalProperties": false,
+    "description": "A verdict on one claim.",
+    "metamodel_version": "1.12.0",
+    "properties": {
+        "alternatives": {
+            "description": "Answers you considered and rejected.",
+            "items": {
+                "$ref": "#/$defs/Alternative"
+            },
+            "type": "array"
+        },
+        "confidence": {
+            "description": "Your probability, from 0 to 1, that your main answer is correct.",
+            "maximum": 1,
+            "minimum": 0,
+            "type": "number"
+        },
+        "evidence": {
+            "description": "The residues your answer rests on.",
+            "items": {
+                "$ref": "#/$defs/Evidence"
+            },
+            "type": "array"
+        },
+        "rationale": {
+            "description": "Two or three sentences on the features of the sequence that led to your answer.",
+            "type": "string"
+        },
+        "reason": {
+            "description": "One or two sentences.",
+            "type": "string"
+        },
+        "verdict": {
+            "$ref": "#/$defs/YesNoUncertain"
+        }
+    },
+    "title": "peptalk_ask",
+    "type": "object",
+    "version": null
+}
+

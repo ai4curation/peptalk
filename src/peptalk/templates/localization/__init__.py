@@ -16,11 +16,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import Field
-
 from peptalk.checks import ranges_check
-from peptalk.schema import AnswerModel, Check, Feature, Range
+from peptalk.schema import Check, Feature
 from peptalk.templates import Template, read_prompt
+from peptalk.templates.localization.schema import Answer
 
 #: Sequence Ontology type names for the targeting signals the prompt names.
 SO_TYPES = {
@@ -31,25 +30,12 @@ SO_TYPES = {
 }
 
 
-class TargetingSignal(AnswerModel):
-    type: str | None = None
-    start: int | None = None
-    end: int | None = None
-
-
-class Answer(AnswerModel):
-    localization: list[str] = Field(default_factory=list)
-    targeting_signals: list[TargetingSignal] = Field(default_factory=list)
-    transmembrane_helices: list[Range] = Field(default_factory=list)
-    protein_name: str | None = None
-    recognised: bool | None = None
-    reason: str | None = None
-
-
 def checks(a: Answer, seq: str, params: dict[str, str] | None = None) -> list[Check]:
     out = []
     if a.targeting_signals:
-        out.append(ranges_check(len(seq), [(s.start, s.end) for s in a.targeting_signals], "targeting_signal_bounds"))
+        out.append(
+            ranges_check(len(seq), [(s.start, s.end) for s in a.targeting_signals or []], "targeting_signal_bounds")
+        )
     if a.transmembrane_helices:
         out.append(ranges_check(len(seq), a.transmembrane_helices, "tm_helix_bounds"))
     return out
@@ -62,18 +48,18 @@ def control_signal(a: Answer) -> str | None:
     """
     if a.recognised:
         return f"recognised as {a.protein_name or 'a known protein'}"
-    signals = [s.type for s in a.targeting_signals if s.type and s.type != "signal peptide"]
+    signals = [s.type for s in a.targeting_signals or [] if s.type and s.type != "signal peptide"]
     return "targeting signals " + ", ".join(signals) if signals else None
 
 
 def features(a: Answer) -> list[Feature]:
     out = []
-    for s in a.targeting_signals:
+    for s in a.targeting_signals or []:
         if s.start is None or s.end is None:
             continue
         so = SO_TYPES.get((s.type or "").lower(), "polypeptide_region")
         out.append(Feature(type=so, start=s.start, end=s.end, name=s.type, attributes={"signal_type": s.type or ""}))
-    out += [Feature(type="transmembrane_polypeptide_region", start=s, end=e) for s, e in a.transmembrane_helices]
+    out += [Feature(type="transmembrane_polypeptide_region", start=s, end=e) for s, e in a.transmembrane_helices or []]
     return out
 
 

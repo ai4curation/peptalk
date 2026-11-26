@@ -5,28 +5,11 @@ Its checks, control and features are those of ``features`` and ``active-site`` t
 
 from __future__ import annotations
 
-from typing import Any, Literal
+from typing import Any
 
-from pydantic import Field
-
-from peptalk.schema import AnswerModel, CatalyticResidue, Check, Feature, PfamDomain, Range, SubstitutedResidue
+from peptalk.schema import Check, Feature
 from peptalk.templates import Template, active_site, features, read_prompt
-
-
-class Answer(AnswerModel):
-    protein_name: str | None = None
-    function: str | None = None
-    ec_number: str | None = None
-    enzyme_family: str | None = None
-    fold: str | None = None
-    pfam_domains: list[PfamDomain] = Field(default_factory=list)
-    transmembrane_helices: list[Range] = Field(default_factory=list)
-    signal_peptide: bool | None = None
-    catalytic_residues: list[CatalyticResidue] = Field(default_factory=list)
-    substituted_or_missing: list[SubstitutedResidue] = Field(default_factory=list)
-    catalytically_active: Literal["yes", "no", "uncertain"] | None = None
-    recognised: bool | None = None
-    reason: str | None = None
+from peptalk.templates.combined.schema import Answer
 
 
 def checks(a: Any, seq: str, params: dict[str, str] | None = None) -> list[Check]:

@@ -1,5 +1,28 @@
 # Changelog
 
+## Unreleased
+
+- **Interchange formats defined in LinkML:** `src/peptalk/datamodel/peptalk.yaml` is the single source of truth
+  for claims files (`ClaimsFile`) and annotation records (`Annotation`).
+  - `just gen-schema` generates the Pydantic models (pydantic-only imports), `claims.schema.json`,
+    `annotation.schema.json` and the reference pages in `docs/schema/`.
+  - The generated files are committed, and a test fails if they are out of date.
+  - LinkML is a development dependency only.
+- **Template answers are LinkML too:** each template is `prompt.txt` plus `schema.yaml`.
+  - `peptalk templates generate PATH` (and `just gen-schema`) writes the template's Pydantic models and JSON
+    Schemas; `peptalk templates check PATH` reports stale files.
+  - Shared building blocks are in `templates/common.yaml`, and `pip install 'peptalk-llm[linkml]'` provides the
+    generator for plugin authors.
+  - Structured-output schemas are cleaned up and adapted per provider (Anthropic transform, OpenAI strict, Gemini).
+    A test checks each template against each provider's subset.
+- **Claims files in YAML:** claims grouped by protein (`proteins: [{id, claims}]`) or a flat list. Each claim is validated against its
+  template, and errors name the claim. TSV and CSV are still accepted for bulk input, chosen by file extension.
+- **`expected` and `note`:** optional fields on a claim, never sent to the model and not part of the cache key.
+  With `expected`, the totals report how many verdicts agree.
+- **New `ask-domain` template:** does the protein contain this Pfam domain, and where?
+- **Examples:** `examples/claims.yaml` (and the same claims in `examples/claims.tsv`).
+- **Docs:** `docs/claims.md`, with a template table generated from the registry (`peptalk tasks --ask`).
+
 ## 0.1.0 (first release)
 
 peptalk (on PyPI as `peptalk-llm`; import and command `peptalk`) asks a frontier LLM what a protein sequence says, from sequence alone, by direct single-shot API calls.

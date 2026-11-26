@@ -96,7 +96,7 @@ def submit(
             payload=list(q.payload),
             effort=effort,
             expected_input_tokens=(
-                provider.count_tokens(q.prompt, model, q.task.json_schema() if structured else None)
+                provider.count_tokens(q.prompt, model, q.task.json_schema(q.payload) if structured else None)
                 if verify_input
                 else None
             ),
@@ -106,7 +106,7 @@ def submit(
     items = []
     for e in entries:
         q = _question(e)
-        items.append((e.custom_id, q.prompt, q.task.json_schema() if structured else None))
+        items.append((e.custom_id, q.prompt, q.task.json_schema(q.payload) if structured else None))
     batch_id = provider.submit_batch(items, model, effort)
     return BatchManifest(
         batch_id=batch_id,

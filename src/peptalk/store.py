@@ -108,12 +108,16 @@ def default_db_path() -> Path:
     return Path(base) / "peptalk" / "peptalk.db"
 
 
+#: Stop reasons that mean the reply was cut off by the output limit (Anthropic, Gemini, OpenAI spellings).
+TRUNCATED = {"max_tokens", "max_output_tokens"}
+
+
 def usable(a: Annotation) -> bool:
     """A record worth reusing: the call returned text and was not a refusal.
 
     An answer that failed parsing or a check is still a usable sample: reusing it records what the model said.
     """
-    return a.error is None and a.text is not None and a.stop_reason != "max_tokens"
+    return a.error is None and a.text is not None and (a.stop_reason or "").lower() not in TRUNCATED
 
 
 def check_key(fields: Sequence[str]) -> tuple[str, ...]:

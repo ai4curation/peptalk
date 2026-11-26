@@ -101,13 +101,14 @@ claim is named by parameters:
 | `ask-function` | `term`, `label` | does the protein have the function of this GO term? |
 | `ask-catalytic-residue` | `position`, `residue` | is this residue catalytic? (also checks the claimed residue is at the position) |
 | `ask-localization` | `compartment` | is the protein located there? |
+| `ask-domain` | `accession`, `name` | does the protein contain this Pfam domain, and where? |
 
-`peptalk ask FASTA --claims claims.tsv` takes one claim per row, so existing annotations (from GO, UniProt or
+`peptalk ask FASTA --claims claims.yaml` takes one question per claim (see [claims.md](claims.md)), so existing annotations (from GO, UniProt or
 ai-gene-review) can be checked one at a time and evaluation sets built from them. Context levels, payloads and
 shuffled controls work as for the other templates; a "yes" for a shuffled copy is flagged. The parameters are
 part of the cache key.
 
-## 5. Schemas: Pydantic, not LinkML, for task answers
+## 5. Schemas: LinkML for everything shared, generated Pydantic at runtime
 
 The protocol does not change: the prompt asks for JSON in plain text, peptalk takes the last JSON object in the
 reply that carries the requested keys, and validates it against the template's answer model. Structured output
@@ -123,18 +124,40 @@ It stays opt-in because it changes the question:
   ClpP-family protease with structured output.
 - **It differs between providers** in which JSON Schema features they accept and how they enforce them.
 
-**Recommendation: plain Pydantic for task schemas; keep LinkML for the shared record model later.**
+**The rule: LinkML is the single source of truth for interchange schemas.** These are the files people and
+programs exchange:
 
-- **Size.** Each answer model is five to fifteen flat fields. Pydantic gives validation, defaults, lenient extra
-  keys, and the JSON Schema for structured outputs (`model_json_schema()`), with no build step.
-- **Codegen.** LinkML would add a YAML schema per template and a generator (`gen-pydantic`, `gen-json-schema`)
-  whose output must be committed and kept current, plus a heavy development dependency. For schemas this small,
-  that doubles what a template author edits.
-- **No gain yet.** LinkML's strengths are ontology-bound enumerations, inheritance across a large model, and
-  interoperability with other LinkML knowledge bases. They do not apply to a single prompt's answer shape.
-- **Where LinkML would earn its keep.** The record model for a pooled, searchable database (`docs/shared-database.md`),
-  with SO and GO bindings and mappings to other curation resources. Define that record in LinkML when the
-  database is built, and generate its Pydantic classes then.
+- **claims files** (class `ClaimsFile`);
+- **annotation records**, the rows of the store, of JSONL and Parquet exports and of a future shared database
+  (class `Annotation`, with `Usage` and `Check`).
+
+Both are defined in [`src/peptalk/datamodel/peptalk.yaml`](../src/peptalk/datamodel/peptalk.yaml), and
+`just gen-schema` generates from it:
+
+- `src/peptalk/datamodel/peptalk.py`, Pydantic models that import only pydantic and the standard library;
+- `claims.schema.json` and `annotation.schema.json`;
+- reference pages in [docs/schema/](schema/index.md).
+
+The generated files are committed, and `tests/test_datamodel.py` (run in CI) fails if regenerating them gives
+any difference. LinkML is a development dependency only: nothing at runtime imports linkml or linkml-runtime.
+The runtime code subclasses the generated interchange models only to give empty defaults and to add checks the
+schema cannot express, such as a claim's parameters matching its template; a test checks that the subclasses add
+no fields.
+
+**Template answer schemas are LinkML too.** A template is a prompt plus a schema: `prompt.txt` next to a
+LinkML `schema.yaml`. `peptalk templates generate` (and `just gen-schema` for the built-in templates) writes
+that template's Pydantic models (`schema.py`, pydantic-only imports) and the JSON Schema of each answer class.
+The shared building blocks (payload keys, domains, residues, GO terms, `[start, end]` ranges) are in
+`src/peptalk/templates/common.yaml`. Plugins follow the same steps ([templates.md](templates.md)).
+
+Before an answer schema is sent as structured output it is cleaned up deterministically and adapted per provider
+(`peptalk.structured`). Payload keys go in only when asked for. In the first live test, an Anthropic schema that
+always carried `rationale` and `alternatives` was refused (`refusal:reasoning_extraction`). Anthropic gets
+nested objects' properties required (it rejected `combined` as "too complex" otherwise) and then its SDK
+transform; OpenAI gets the strict form; Gemini gets the schema as is. A test checks every
+template's schema against each provider's documented subset. JSON Schemas are generated without explicit nulls,
+so an optional field is simply not required; the OpenAI strict form adds the nulls back, because strict mode
+requires every property.
 
 `peptalk tasks --schema NAME` and `GET /tasks/{name}/schema` print a template's JSON Schema.
 

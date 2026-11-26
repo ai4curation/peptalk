@@ -1,0 +1,12 @@
+# The claims of examples/claims.yaml as a table, for machine-generated bulk input. See docs/claims.md.
+id	task	position	residue	term	label	compartment	accession	name	expected	note
+Q2PAY3_wt	ask-catalytic-residue	436	D						yes	catalytic Asp of the HRD motif (UniProt proton acceptor)
+Q2PAY3_wt	ask-catalytic-residue	150	R						no	decoy: an arginine outside the kinase domain
+Q2PAY3_wt	ask-function			GO:0004674	protein serine/threonine kinase activity				yes	an active kinase
+Q2PAY3_wt	ask-localization					rhoptry			yes	ROP17 is a rhoptry protein
+Q2PAY3_asp_to_asn	ask-catalytic-residue	436	D						no	a stale claim: this mutant has N436, which the claim check flags before the verdict is read
+Q2PAY3_asp_to_asn	ask-function			GO:0004674	protein serine/threonine kinase activity				no	NOT-style: with the catalytic Asp lost, a curator would not assert kinase activity
+A0ABQ0J1P6	ask-domain						PF00005	ABC_tran	yes	InterPro places the ABC transporter domain at 24-167
+A0ABQ0J1P6	ask-domain						PF00069	Pkinase	no	decoy: a kinase domain on an ABC ATPase
+A0ABQ0J1P6	ask-function			GO:0016887	ATP hydrolysis activity				yes	GO annotation of the UniProt entry
+A0ABQ0J1P6	ask-localization					nucleus			no	decoy: a bacterial protein has no nucleus

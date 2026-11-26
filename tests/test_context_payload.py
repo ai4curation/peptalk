@@ -3,7 +3,8 @@
 import json
 import sqlite3
 
-from peptalk.annotator import Annotator, Claim
+from peptalk.annotator import Annotator
+from peptalk.claims import Claim
 from peptalk.exchange import to_gff3
 from peptalk.fasta import parse_fasta
 from peptalk.providers import get_provider

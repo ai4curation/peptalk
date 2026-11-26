@@ -1,0 +1,359 @@
+{
+    "$defs": {
+        "Alternative": {
+            "additionalProperties": false,
+            "description": "",
+            "properties": {
+                "answer": {
+                    "type": "string"
+                },
+                "why_not": {
+                    "type": "string"
+                }
+            },
+            "title": "Alternative",
+            "type": "object"
+        },
+        "Answer": {
+            "additionalProperties": false,
+            "description": "Secondary structure, long-range contacts, fold, function and functional residues.",
+            "properties": {
+                "alternatives": {
+                    "description": "Answers you considered and rejected.",
+                    "items": {
+                        "$ref": "#/$defs/Alternative"
+                    },
+                    "type": "array"
+                },
+                "confidence": {
+                    "description": "Your probability, from 0 to 1, that your main answer is correct.",
+                    "maximum": 1,
+                    "minimum": 0,
+                    "type": "number"
+                },
+                "contacts": {
+                    "items": {
+                        "items": {
+                            "description": "Residue pairs [i, j] predicted to be in contact.",
+                            "type": "integer"
+                        },
+                        "maxItems": 2,
+                        "minItems": 2,
+                        "type": "array"
+                    },
+                    "type": "array"
+                },
+                "evidence": {
+                    "description": "The residues your answer rests on.",
+                    "items": {
+                        "$ref": "#/$defs/Evidence"
+                    },
+                    "type": "array"
+                },
+                "fold": {
+                    "description": "Short name of the predicted fold or structural superfamily.",
+                    "type": "string"
+                },
+                "function": {
+                    "description": "One sentence on the molecular function.",
+                    "type": "string"
+                },
+                "functional_residues": {
+                    "items": {
+                        "$ref": "#/$defs/FunctionalResidue"
+                    },
+                    "type": "array"
+                },
+                "helices": {
+                    "items": {
+                        "items": {
+                            "description": "Helices as [start, end] residue ranges (1-based).",
+                            "type": "integer"
+                        },
+                        "maxItems": 2,
+                        "minItems": 2,
+                        "type": "array"
+                    },
+                    "type": "array"
+                },
+                "protein_name": {
+                    "type": "string"
+                },
+                "rationale": {
+                    "description": "Two or three sentences on the features of the sequence that led to your answer.",
+                    "type": "string"
+                },
+                "recognised": {
+                    "description": "True if you recognise this as a specific known protein.",
+                    "type": "boolean"
+                },
+                "strands": {
+                    "items": {
+                        "items": {
+                            "description": "Beta strands as [start, end] residue ranges (1-based).",
+                            "type": "integer"
+                        },
+                        "maxItems": 2,
+                        "minItems": 2,
+                        "type": "array"
+                    },
+                    "type": "array"
+                }
+            },
+            "title": "Answer",
+            "type": "object"
+        },
+        "AnswerBase": {
+            "additionalProperties": false,
+            "description": "The optional payload keys every answer may carry when asked for.",
+            "properties": {
+                "alternatives": {
+                    "description": "Answers you considered and rejected.",
+                    "items": {
+                        "$ref": "#/$defs/Alternative"
+                    },
+                    "type": "array"
+                },
+                "confidence": {
+                    "description": "Your probability, from 0 to 1, that your main answer is correct.",
+                    "maximum": 1,
+                    "minimum": 0,
+                    "type": "number"
+                },
+                "evidence": {
+                    "description": "The residues your answer rests on.",
+                    "items": {
+                        "$ref": "#/$defs/Evidence"
+                    },
+                    "type": "array"
+                },
+                "rationale": {
+                    "description": "Two or three sentences on the features of the sequence that led to your answer.",
+                    "type": "string"
+                }
+            },
+            "title": "AnswerBase",
+            "type": "object"
+        },
+        "CatalyticResidue": {
+            "additionalProperties": false,
+            "description": "",
+            "properties": {
+                "position": {
+                    "description": "1-based residue position.",
+                    "type": "integer"
+                },
+                "residue": {
+                    "description": "One-letter code actually present in this sequence.",
+                    "type": "string"
+                },
+                "role": {
+                    "type": "string"
+                }
+            },
+            "title": "CatalyticResidue",
+            "type": "object"
+        },
+        "Evidence": {
+            "additionalProperties": false,
+            "description": "",
+            "properties": {
+                "note": {
+                    "type": "string"
+                },
+                "position": {
+                    "description": "1-based residue position.",
+                    "type": "integer"
+                },
+                "residue": {
+                    "description": "One-letter code.",
+                    "type": "string"
+                }
+            },
+            "title": "Evidence",
+            "type": "object"
+        },
+        "FunctionalResidue": {
+            "additionalProperties": false,
+            "description": "",
+            "properties": {
+                "position": {
+                    "type": "integer"
+                },
+                "residue": {
+                    "description": "One-letter code.",
+                    "type": "string"
+                },
+                "role": {
+                    "type": "string"
+                }
+            },
+            "title": "FunctionalResidue",
+            "type": "object"
+        },
+        "GoTerm": {
+            "additionalProperties": false,
+            "description": "",
+            "properties": {
+                "id": {
+                    "description": "GO term id, GO:xxxxxxx.",
+                    "type": "string"
+                },
+                "label": {
+                    "description": "GO term name.",
+                    "type": "string"
+                }
+            },
+            "title": "GoTerm",
+            "type": "object"
+        },
+        "PfamDomain": {
+            "additionalProperties": false,
+            "description": "",
+            "properties": {
+                "accession": {
+                    "description": "Pfam accession, PFxxxxx.",
+                    "type": "string"
+                },
+                "end": {
+                    "description": "Last residue (1-based).",
+                    "type": "integer"
+                },
+                "name": {
+                    "description": "Pfam short name.",
+                    "type": "string"
+                },
+                "start": {
+                    "description": "First residue (1-based).",
+                    "type": "integer"
+                }
+            },
+            "title": "PfamDomain",
+            "type": "object"
+        },
+        "SubstitutedResidue": {
+            "additionalProperties": false,
+            "description": "",
+            "properties": {
+                "expected": {
+                    "description": "The canonical residue.",
+                    "type": "string"
+                },
+                "found": {
+                    "description": "The residue in this sequence.",
+                    "type": "string"
+                },
+                "position": {
+                    "type": "integer"
+                },
+                "role": {
+                    "type": "string"
+                }
+            },
+            "title": "SubstitutedResidue",
+            "type": "object"
+        },
+        "YesNoUncertain": {
+            "description": "",
+            "enum": [
+                "yes",
+                "no",
+                "uncertain"
+            ],
+            "title": "YesNoUncertain",
+            "type": "string"
+        }
+    },
+    "$id": "https://w3id.org/ai4curation/peptalk/templates/structure",
+    "$schema": "https://json-schema.org/draft/2019-09/schema",
+    "additionalProperties": false,
+    "description": "Secondary structure, long-range contacts, fold, function and functional residues.",
+    "metamodel_version": "1.12.0",
+    "properties": {
+        "alternatives": {
+            "description": "Answers you considered and rejected.",
+            "items": {
+                "$ref": "#/$defs/Alternative"
+            },
+            "type": "array"
+        },
+        "confidence": {
+            "description": "Your probability, from 0 to 1, that your main answer is correct.",
+            "maximum": 1,
+            "minimum": 0,
+            "type": "number"
+        },
+        "contacts": {
+            "items": {
+                "items": {
+                    "description": "Residue pairs [i, j] predicted to be in contact.",
+                    "type": "integer"
+                },
+                "maxItems": 2,
+                "minItems": 2,
+                "type": "array"
+            },
+            "type": "array"
+        },
+        "evidence": {
+            "description": "The residues your answer rests on.",
+            "items": {
+                "$ref": "#/$defs/Evidence"
+            },
+            "type": "array"
+        },
+        "fold": {
+            "description": "Short name of the predicted fold or structural superfamily.",
+            "type": "string"
+        },
+        "function": {
+            "description": "One sentence on the molecular function.",
+            "type": "string"
+        },
+        "functional_residues": {
+            "items": {
+                "$ref": "#/$defs/FunctionalResidue"
+            },
+            "type": "array"
+        },
+        "helices": {
+            "items": {
+                "items": {
+                    "description": "Helices as [start, end] residue ranges (1-based).",
+                    "type": "integer"
+                },
+                "maxItems": 2,
+                "minItems": 2,
+                "type": "array"
+            },
+            "type": "array"
+        },
+        "protein_name": {
+            "type": "string"
+        },
+        "rationale": {
+            "description": "Two or three sentences on the features of the sequence that led to your answer.",
+            "type": "string"
+        },
+        "recognised": {
+            "description": "True if you recognise this as a specific known protein.",
+            "type": "boolean"
+        },
+        "strands": {
+            "items": {
+                "items": {
+                    "description": "Beta strands as [start, end] residue ranges (1-based).",
+                    "type": "integer"
+                },
+                "maxItems": 2,
+                "minItems": 2,
+                "type": "array"
+            },
+            "type": "array"
+        }
+    },
+    "title": "peptalk_structure",
+    "type": "object",
+    "version": null
+}
+

@@ -28,6 +28,7 @@ SUMMARY_COLUMNS = [
     "confidence",
     "protein_name",
     "call",
+    "expected",
     "flags",
     "cost_usd",
     "reused",
@@ -66,6 +67,7 @@ def summary_rows(annotations: Iterable[Annotation]) -> list[dict[str, str]]:
                 "confidence": a.confidence,
                 "protein_name": str((a.answer or {}).get("protein_name") or ""),
                 "call": headline(a),
+                "expected": a.expected or "",
                 "flags": " | ".join(flags),
                 "cost_usd": "" if a.cost_usd is None else f"{a.cost_usd:.4f}",
                 "reused": "yes" if a.cached else "",
@@ -100,13 +102,29 @@ def totals(annotations: list[Annotation]) -> dict[str, float | int | None]:
     }
 
 
+def agreement(annotations: Iterable[Annotation]) -> tuple[int, int]:
+    """Claims with an expected verdict that got an answer: (verdict equals expected, all such claims).
+
+    >>> agreement([])
+    (0, 0)
+    """
+    pairs = [
+        ((a.answer or {}).get("verdict"), a.expected)
+        for a in annotations
+        if a.expected and a.condition == "real" and a.answer is not None
+    ]
+    return sum(v == e for v, e in pairs), len(pairs)
+
+
 def totals_line(annotations: list[Annotation]) -> str:
     t = totals(annotations)
     spent = "unknown (no price for this model)" if t["cost_usd"] is None else f"${t['cost_usd']:.4f}"
-    return (
+    line = (
         f"{t['answers']} answers ({t['calls']} new calls, {t['reused']} reused, {t['errors']} errors, "
         f"{t['flagged']} flagged); {t['input_tokens']} input + {t['output_tokens']} output tokens; spent {spent}"
     )
+    agree, n = agreement(annotations)
+    return line + (f"; {agree} of {n} verdicts match expected" if n else "")
 
 
 def dumps_json(annotations: list[Annotation]) -> str:
