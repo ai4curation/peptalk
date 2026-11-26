@@ -1,5 +1,10 @@
 """Records the tool writes, and the building blocks task answer models are made from.
 
+The records (``Annotation``, ``Usage``, ``Check``) are generated from the LinkML schema
+``src/peptalk/datamodel/peptalk.yaml`` (``just gen-schema``). The answer models of individual tasks are
+hand-written Pydantic here and in the templates: they are the shapes asked of the model, and their JSON Schema is
+what opt-in structured output sends.
+
 Each task's own answer model lives with its template (``peptalk.templates``). Answer models derive from
 :class:`AnswerModel`, which is lenient: models sometimes add keys or leave fields out, so extra keys are kept and
 every field has a default. Validation still catches wrong types (a string where a list of ranges belongs).
@@ -15,6 +20,11 @@ from __future__ import annotations
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
+
+from peptalk.datamodel import peptalk as datamodel
+from peptalk.datamodel.peptalk import Check, Usage
+
+__all__ = ["Annotation", "AnswerModel", "Check", "Completion", "Confidence", "Feature", "Usage"]
 
 
 class Evidence(BaseModel):
@@ -90,18 +100,8 @@ class Feature(BaseModel):
     attributes: dict[str, str] = Field(default_factory=dict)
 
 
-class Usage(BaseModel):
-    """Token counts for one call. ``thinking_tokens`` is a part of ``output_tokens`` when reported."""
-
-    input_tokens: int = 0
-    output_tokens: int = 0
-    thinking_tokens: int | None = None
-    cache_read_input_tokens: int = 0
-    cache_creation_input_tokens: int = 0
-
-
 class Completion(BaseModel):
-    """What a provider returns for one prompt."""
+    """What a provider returns for one prompt (internal; not an interchange format)."""
 
     text: str
     usage: Usage = Field(default_factory=Usage)
@@ -111,67 +111,24 @@ class Completion(BaseModel):
     response_id: str | None = None
 
 
-class Check(BaseModel):
-    """One automatic check of an answer against the sequence or the shuffled control."""
-
-    name: str
-    passed: bool
-    detail: str = ""
-
-
 Confidence = Literal["checks_passed", "flagged", "no_answer"]
 
 
-class Annotation(BaseModel):
+class Annotation(datamodel.Annotation):
     """One answer to one task for one sequence, with provenance, checks and cost.
 
-    ``uid`` identifies the call that produced the answer; a cached answer keeps the uid of its call, so merged
-    exports from different people deduplicate on it. ``seq_md5`` (upper-case residues, as UniParc) keys the
-    record to the exact sequence asked: for a shuffled control that is the shuffled sequence.
+    The fields are those of the generated ``peptalk.datamodel.peptalk.Annotation`` (from the LinkML schema
+    ``src/peptalk/datamodel/peptalk.yaml``, the single source of truth). This class only gives the open-ended and
+    list fields empty defaults instead of None, and adds :meth:`completion`; a test checks it adds no fields.
     """
 
-    uid: str
-    id: str
-    description: str = ""
-    task: str
-    condition: Literal["real", "shuffled"] = "real"
-    sequence: str
-    seq_md5: str
-    sequence_length: int
-    provider: str
-    model: str
-    effort: str
     options: dict[str, Any] = Field(default_factory=dict)
-    client: str | None = None
-    annotator_version: str | None = None
-    served_model: str | None = None
-    fallback_used: bool = False
-    response_id: str | None = None
-    prompt_version: str
-    prompt_sha256: str
-    context: str = "blind"
-    output: Literal["text", "json_schema"] = "text"
     params: dict[str, str] = Field(default_factory=dict)
     payload: list[str] = Field(default_factory=list)
-    expected: str | None = None
-    note: str | None = None
     header: dict[str, str] = Field(default_factory=dict)
-    text: str | None = None
     answer: dict[str, Any] | None = None
-    validation_error: str | None = None
-    stop_reason: str | None = None
-    error: str | None = None
     usage: Usage = Field(default_factory=Usage)
-    expected_input_tokens: int | None = None
-    cost_usd: float | None = None
-    batch: bool = False
-    batch_id: str | None = None
-    cached: bool = False
     checks: list[Check] = Field(default_factory=list)
-    confidence: Confidence = "no_answer"
-    started_at: str
-    finished_at: str | None = None
-    duration_ms: int | None = None
 
     def completion(self) -> Completion | None:
         """The stored reply as a Completion, for reuse from the cache."""
@@ -182,6 +139,6 @@ class Annotation(BaseModel):
             usage=self.usage,
             served_model=self.served_model,
             stop_reason=self.stop_reason,
-            fallback_used=self.fallback_used,
+            fallback_used=bool(self.fallback_used),
             response_id=self.response_id,
         )

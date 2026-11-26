@@ -40,8 +40,8 @@ def test_docs_table_is_current():
 
 def test_yaml_values_are_read_as_meant():
     (c,) = parse_claims_yaml(
-        "proteins:\n  P1:\n    - task: ask-catalytic-residue\n      params: {position: 7, residue: D}\n"
-        "      expected: no\n"
+        "proteins:\n  - id: P1\n    claims:\n      - task: ask-catalytic-residue\n"
+        "        params: {position: 7, residue: D}\n        expected: no\n"
     )
     assert c.params == {"position": "7", "residue": "D"} and c.expected == "no"
     assert parse_claims_yaml("- {id: P1, task: ask-localization, params: {compartment: nucleus}}")[0].id == "P1"
@@ -51,8 +51,19 @@ def test_yaml_values_are_read_as_meant():
     "text,message",
     [
         ("claims:\n  - {id: P1, task: ask-nothing, params: {}}", "claims → 1: unknown task 'ask-nothing'"),
-        ("proteins:\n  P1:\n    - {task: ask-domain, params: {accession: PF00069}}", "missing name"),
-        ("proteins:\n  P1:\n    - {task: ask-domain, params: {accession: PF1, name: X, start: 3}}", "takes no start"),
+        (
+            "proteins:\n  - id: P1\n    claims:\n      - {task: ask-domain, params: {accession: PF00069}}",
+            r"proteins → 1 → \(P1\) → claims → 1: missing name",
+        ),
+        (
+            "proteins:\n  - id: P1\n    claims:\n      - {task: ask-domain, params: {accession: PF1, name: X, start: 3}}",
+            "takes no start",
+        ),
+        ("proteins:\n  P1: []", "proteins: Input should be a valid list"),
+        (
+            "proteins:\n  - id: P1\n    claims:\n      - {task: ask-domain, parms: {}}",
+            "parms: Extra inputs are not permitted",
+        ),
         ("claims:\n  - {id: P1, task: ask-localization, params: {compartment: x}, expected: maybe}", "expected"),
         ("claims:\n  - {task: ask-localization, params: {compartment: x}}", "id"),
         ("protein:\n  P1: []", "protein"),
@@ -119,7 +130,8 @@ def test_cli_runs_the_example(tmp_path):
 def test_cli_reports_a_bad_claims_file(tmp_path):
     bad = tmp_path / "claims.yaml"
     bad.write_text(
-        "proteins:\n  Q2PAY3_wt:\n    - task: ask-catalytic-residue\n      params: {postion: 436, residue: D}\n"
+        "proteins:\n  - id: Q2PAY3_wt\n    claims:\n      - task: ask-catalytic-residue\n"
+        "        params: {postion: 436, residue: D}\n"
     )
     result = runner.invoke(app, ["ask", str(EXAMPLES / "proteins.fasta"), "--claims", str(bad), "--provider", "stub"])
     assert result.exit_code == 2 and "takes no postion" in result.stderr

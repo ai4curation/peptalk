@@ -30,3 +30,14 @@ build:
 # One live call per task on the example file with a cheap model (about one cent; needs ANTHROPIC_API_KEY; logged in the default store)
 smoke model="claude-haiku-5-5":
     uv run peptalk annotate examples/proteins.fasta -m {{model}} -e low -t features -t active-site --no-reuse -f tsv
+
+# Regenerate the interchange schemas from the LinkML source (src/peptalk/datamodel/peptalk.yaml): Pydantic, JSON Schemas, docs
+gen-schema:
+    uv run gen-pydantic --meta None src/peptalk/datamodel/peptalk.yaml > src/peptalk/datamodel/peptalk.py
+    uv run gen-json-schema --top-class ClaimsFile src/peptalk/datamodel/peptalk.yaml > src/peptalk/datamodel/claims.schema.json
+    uv run gen-json-schema --top-class Annotation src/peptalk/datamodel/peptalk.yaml > src/peptalk/datamodel/annotation.schema.json
+    rm -rf docs/schema && uv run gen-doc --directory docs/schema src/peptalk/datamodel/peptalk.yaml
+
+# Fail if the committed generated files differ from what the LinkML source generates
+check-schema:
+    uv run pytest -q tests/test_datamodel.py

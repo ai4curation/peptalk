@@ -1,23 +1,27 @@
 """Claims files: specific claims about specific proteins, one question each, answered yes, no or uncertain.
 
-YAML is the format to write by hand; TSV and CSV are accepted for machine-generated bulk input. The format is
-chosen by file extension (``.yaml``/``.yml``, ``.tsv``/``.tab``, ``.csv``). Every claim is validated against its
-template, so a missing or misspelt parameter is reported with where it is. See docs/claims.md.
+The format is defined by the LinkML schema ``src/peptalk/datamodel/peptalk.yaml`` (class ``ClaimsFile``), from
+which the Pydantic models and ``claims.schema.json`` are generated. This module reads the files and adds the
+check that the schema cannot make: that each claim's parameters are exactly those of its template.
 
-A YAML file groups claims by protein (the id is the first word of the FASTA header):
+YAML is the format to write by hand; TSV and CSV are accepted for machine-generated bulk input. The format is
+chosen by file extension (``.yaml``/``.yml``, ``.tsv``/``.tab``, ``.csv``). See docs/claims.md.
+
+Claims grouped by protein (the id is the first word of the FASTA header):
 
 >>> text = '''
 ... proteins:
-...   Q2PAY3_wt:
-...     - task: ask-catalytic-residue
-...       params: {position: 436, residue: D}
-...       expected: yes
-...       note: catalytic Asp of the HRD motif
+...   - id: Q2PAY3_wt
+...     claims:
+...       - task: ask-catalytic-residue
+...         params: {position: 436, residue: D}
+...         expected: yes
+...         note: catalytic Asp of the HRD motif
 ... '''
 >>> [(c.id, c.task, c.params, c.expected) for c in parse_claims_yaml(text)]
 [('Q2PAY3_wt', 'ask-catalytic-residue', {'position': '436', 'residue': 'D'}, 'yes')]
 
-or lists them flat, each with its ``id``:
+or listed flat, each with its ``id``:
 
 >>> parse_claims_yaml("claims:\\n  - {id: P1, task: ask-localization, params: {compartment: nucleus}}")[0].params
 {'compartment': 'nucleus'}
@@ -30,15 +34,16 @@ peptalk.claims.ClaimsError: claims → 1: ask-localization takes no compartmnet 
 from __future__ import annotations
 
 import csv
+import re
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
+from pydantic import Field, ValidationError, field_validator, model_validator
 
+from peptalk.datamodel import peptalk as datamodel
 from peptalk.templates import TEMPLATES
 
-Verdict = Literal["yes", "no", "uncertain"]
 #: Fields of a claim that describe it but are never sent to the model and are not part of the cache key.
 INFO_FIELDS = ("expected", "note")
 
@@ -47,37 +52,25 @@ class ClaimsError(ValueError):
     """A claims file that cannot be read, with the place of each problem."""
 
 
-def _verdict(value: Any) -> Any:
-    """YAML reads an unquoted yes/no as true/false; take those as the verdicts they were meant as."""
-    if isinstance(value, bool):
-        return "yes" if value else "no"
-    return value.strip().lower() if isinstance(value, str) else value
+class Claim(datamodel.Claim):
+    """A claim (generated from the LinkML class ``Claim``), checked against its template.
 
+    Parameter values are read as text, and the parameters must be exactly those the template takes.
+    """
 
-class ClaimBody(BaseModel):
-    """One claim, without the protein id (as written under a protein in a grouped YAML file)."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    task: str = Field(description="An ask template, e.g. ask-catalytic-residue")
-    params: dict[str, str] = Field(default_factory=dict, description="The template's parameters")
-    expected: Verdict | None = Field(default=None, description="The verdict you expect, for benchmarks")
-    note: str | None = Field(default=None, description="Anything; kept with the result, never sent")
+    params: dict[str, str] = Field(default_factory=dict)
 
     @field_validator("params", mode="before")
     @classmethod
-    def _strings(cls, value: Any) -> Any:
+    def _as_text(cls, value: Any) -> Any:
+        if value is None:
+            return {}
         if isinstance(value, dict):
             return {str(k): str(v) for k, v in value.items() if v is not None and str(v).strip() != ""}
         return value
 
-    @field_validator("expected", mode="before")
-    @classmethod
-    def _expected(cls, value: Any) -> Any:
-        return _verdict(value) or None
-
     @model_validator(mode="after")
-    def _matches_template(self) -> ClaimBody:
+    def _matches_template(self) -> Claim:
         if self.task not in TEMPLATES:
             asks = ", ".join(sorted(n for n in TEMPLATES if TEMPLATES[n].params))
             raise ValueError(f"unknown task {self.task!r}; claims use an ask template: {asks}")
@@ -94,23 +87,17 @@ class ClaimBody(BaseModel):
         return self
 
 
-class Claim(ClaimBody):
-    """One claim about one protein."""
-
-    id: str = Field(description="The protein: the first word of its FASTA header")
+class _Yaml12Loader(yaml.SafeLoader):
+    """YAML with the 1.2 booleans: only true and false. So `expected: no` is the verdict "no", not false."""
 
 
-class ClaimsFile(BaseModel):
-    """A YAML claims file: ``proteins`` (claims grouped by protein id) and/or ``claims`` (a flat list)."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    proteins: dict[str, list[ClaimBody]] = Field(default_factory=dict)
-    claims: list[Claim] = Field(default_factory=list)
-
-    def all_claims(self) -> list[Claim]:
-        grouped = [Claim(id=pid, **body.model_dump()) for pid, bodies in self.proteins.items() for body in bodies]
-        return grouped + self.claims
+_Yaml12Loader.yaml_implicit_resolvers = {
+    first: [(tag, rx) for tag, rx in resolvers if tag != "tag:yaml.org,2002:bool"]
+    for first, resolvers in yaml.SafeLoader.yaml_implicit_resolvers.items()
+}
+_Yaml12Loader.add_implicit_resolver(
+    "tag:yaml.org,2002:bool", re.compile(r"^(?:true|True|TRUE|false|False|FALSE)$"), list("tTfF")
+)
 
 
 def _where(loc: tuple[Any, ...]) -> str:
@@ -119,24 +106,38 @@ def _where(loc: tuple[Any, ...]) -> str:
     return " → ".join(parts) if parts else "file"
 
 
-def _errors(e: ValidationError, source: str = "") -> ClaimsError:
+def _errors(e: ValidationError, prefix: str, loc: tuple[Any, ...] = ()) -> ClaimsError:
     lines = []
     for err in e.errors():
-        loc = tuple(p for p in err["loc"] if not (isinstance(p, str) and "[" in p))  # drop union branch names
         msg = err["msg"].removeprefix("Value error, ")
-        lines.append(f"{source}{_where(loc)}: {msg}")
+        lines.append(f"{prefix}{_where(loc + tuple(err['loc']))}: {msg}")
     return ClaimsError("\n".join(lines))
 
 
+def _claim(fields: dict[str, Any], prefix: str, loc: tuple[Any, ...]) -> Claim:
+    try:
+        return Claim.model_validate(fields)
+    except ValidationError as e:
+        raise _errors(e, prefix, loc) from e
+
+
 def parse_claims_yaml(text: str, source: str = "") -> list[Claim]:
-    """Claims from YAML text (see the module docstring for the shape)."""
-    data = yaml.safe_load(text) or {}
+    """Claims from YAML text: ``proteins`` (claims grouped by protein) and/or ``claims`` (a flat list)."""
+    data = yaml.load(text, Loader=_Yaml12Loader) or {}
     if isinstance(data, list):
         data = {"claims": data}
     try:
-        return ClaimsFile.model_validate(data).all_claims()
+        parsed = datamodel.ClaimsFile.model_validate(data)
     except ValidationError as e:
         raise _errors(e, source) from e
+    claims = []
+    for i, protein in enumerate(parsed.proteins or []):
+        for j, body in enumerate(protein.claims):
+            fields = {"id": protein.id, **body.model_dump(exclude_none=True)}
+            claims.append(_claim(fields, source, ("proteins", i, f"({protein.id})", "claims", j)))
+    for i, c in enumerate(parsed.claims or []):
+        claims.append(_claim(c.model_dump(exclude_none=True), source, ("claims", i)))
+    return claims
 
 
 def parse_claims_table(text: str, delimiter: str = "\t", source: str = "") -> list[Claim]:
@@ -153,12 +154,9 @@ def parse_claims_table(text: str, delimiter: str = "\t", source: str = "") -> li
     for n, row in enumerate(csv.DictReader(lines, delimiter=delimiter), start=2):
         cells = {k: (v or "").strip() for k, v in row.items() if k is not None}
         params = {k: v for k, v in cells.items() if k not in ("id", "task", *INFO_FIELDS) and v}
-        try:
-            fields = {"id": cells.get("id", ""), "task": cells.get("task", ""), "params": params}
-            fields.update({k: cells[k] for k in INFO_FIELDS if cells.get(k)})
-            claims.append(Claim.model_validate(fields))
-        except ValidationError as e:
-            raise _errors(e, f"{source}row {n} → ") from e
+        fields: dict[str, Any] = {"id": cells.get("id", ""), "task": cells.get("task", ""), "params": params}
+        fields.update({k: cells[k] for k in INFO_FIELDS if cells.get(k)})
+        claims.append(_claim(fields, f"{source}row {n} → ", ()))
     return claims
 
 

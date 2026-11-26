@@ -26,6 +26,7 @@ from pydantic import BaseModel, ValidationError
 from peptalk import __version__
 from peptalk.checks import control_check, input_check, residues_check
 from peptalk.claims import Claim
+from peptalk.datamodel import peptalk as datamodel
 from peptalk.fasta import SequenceRecord, shuffle_sequence
 from peptalk.parse import answer_object, has_tool_call
 from peptalk.pricing import Price, cost, price_for
@@ -171,11 +172,11 @@ def new_annotation(q: Question, provider: Provider, model: str, effort: str, str
         annotator_version=__version__,
         prompt_version=q.task.version,
         prompt_sha256=prompt_sha256(q.prompt),
-        context=q.effective_context,
-        output="json_schema" if structured else "text",
+        context=datamodel.HeaderContext(q.effective_context),
+        output=datamodel.OutputMode("json_schema" if structured else "text"),
         params=q.params,
         payload=list(q.payload),
-        expected=q.expected,
+        expected=datamodel.Verdict(q.expected) if q.expected else None,
         note=q.note,
         header=q.record.header,
         started_at=now(),
@@ -207,7 +208,7 @@ def fill(ann: Annotation, q: Question, completion: Completion | None, price: Pri
             if evidence:
                 cited = [(e.position, e.residue) for e in evidence]
                 ann.checks.append(residues_check(q.sequence, cited, "evidence_residues_match_sequence"))
-    ann.confidence = confidence(ann)
+    ann.confidence = datamodel.Confidence(confidence(ann))
     return parsed
 
 
@@ -223,7 +224,7 @@ def finalize(triples: list[tuple[Question, Annotation, BaseModel | None]]) -> li
         if q.condition == "real" and key(q) in shuffled and ann.answer is not None:
             ann.checks = [c for c in ann.checks if c.name != "shuffled_control"]
             ann.checks.append(control_check(q.task.control_signal, shuffled[key(q)]))
-        ann.confidence = confidence(ann)
+        ann.confidence = datamodel.Confidence(confidence(ann))
         out.append(ann)
     return out
 

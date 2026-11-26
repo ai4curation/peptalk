@@ -2,7 +2,13 @@
 
 ## Unreleased
 
-- **Claims files in YAML:** claims grouped by protein (or a flat list). Each claim is validated against its
+- **Interchange formats defined in LinkML:** `src/peptalk/datamodel/peptalk.yaml` is the single source of truth
+  for claims files (`ClaimsFile`) and annotation records (`Annotation`).
+  - `just gen-schema` generates the Pydantic models (pydantic-only imports), `claims.schema.json`,
+    `annotation.schema.json` and the reference pages in `docs/schema/`.
+  - The generated files are committed, and a test fails if they are out of date.
+  - LinkML is a development dependency only.
+- **Claims files in YAML:** claims grouped by protein (`proteins: [{id, claims}]`) or a flat list. Each claim is validated against its
   template, and errors name the claim. TSV and CSV are still accepted for bulk input, chosen by file extension.
 - **`expected` and `note`:** optional fields on a claim, never sent to the model and not part of the cache key.
   With `expected`, the totals report how many verdicts agree.

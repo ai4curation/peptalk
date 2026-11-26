@@ -98,11 +98,12 @@ has ten claims about the example proteins, and
 
 ```yaml
 proteins:
-  Q2PAY3_wt:
-    - task: ask-catalytic-residue
-      params: {position: 436, residue: D}
-      expected: yes
-      note: catalytic Asp of the HRD motif (UniProt proton acceptor)
+  - id: Q2PAY3_wt
+    claims:
+      - task: ask-catalytic-residue
+        params: {position: 436, residue: D}
+        expected: yes
+        note: catalytic Asp of the HRD motif (UniProt proton acceptor)
 ```
 
 ```bash
@@ -347,6 +348,12 @@ duplicates. `peptalk fasta` writes each annotated sequence once, named by its MD
 back to the records on `seq_md5`. [docs/shared-database.md](https://github.com/ai4curation/peptalk/blob/main/docs/shared-database.md) sketches a shared,
 searchable database built from these pieces; it is designed, not built.
 
+The record format, like the claims file format, is defined in LinkML
+([`src/peptalk/datamodel/peptalk.yaml`](https://github.com/ai4curation/peptalk/blob/main/src/peptalk/datamodel/peptalk.yaml),
+class `Annotation`). It comes with a generated JSON Schema
+([`annotation.schema.json`](https://github.com/ai4curation/peptalk/blob/main/src/peptalk/datamodel/annotation.schema.json))
+and [reference pages](https://github.com/ai4curation/peptalk/blob/main/docs/schema/Annotation.md).
+
 ## Cost
 
 Anthropic list prices are built in (dollars per million tokens; thinking is billed as output; batches at half
@@ -398,7 +405,12 @@ just test     # pytest and doctests
 just check    # ruff, mypy, tests
 just build    # sdist and wheel in dist/
 just smoke    # live calls with Claude Haiku 5.5 on examples/proteins.fasta (about one cent)
+just gen-schema  # regenerate Pydantic, JSON Schemas and docs/schema from the LinkML schema (needs the dev group)
 ```
+
+The interchange formats (claims files, annotation records) are defined in LinkML in
+`src/peptalk/datamodel/peptalk.yaml`. After editing it, run `just gen-schema` and commit the generated files; a
+test fails if they are out of date. LinkML is needed only for development, never at runtime.
 
 The tests call no model. `tests/data` holds one fs2f FEAT protein and the ROP17 kinase with its catalytic
 Asp436Asn mutant, with the replies Fable 5.2 gave to them in fs2f.

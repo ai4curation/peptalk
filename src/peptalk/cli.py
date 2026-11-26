@@ -370,10 +370,11 @@ def ask(
     Example (examples/claims.yaml in the repository):
 
         proteins:
-          Q2PAY3_wt:
-            - task: ask-catalytic-residue
-              params: {position: 436, residue: D}
-              expected: yes
+          - id: Q2PAY3_wt
+            claims:
+              - task: ask-catalytic-residue
+                params: {position: 436, residue: D}
+                expected: yes
 
     'expected' and 'note' are optional and never sent to the model; with 'expected', the totals report how many
     verdicts agree.

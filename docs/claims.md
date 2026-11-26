@@ -20,19 +20,21 @@ its FASTA header):
 
 ```yaml
 proteins:
-  Q2PAY3_wt:                          # the id in the FASTA file
-    - task: ask-catalytic-residue     # which ask template
-      params: {position: 436, residue: D}
-      expected: yes                   # optional: the verdict you expect
-      note: catalytic Asp of the HRD motif   # optional: kept with the result
-    - task: ask-function
-      params: {term: "GO:0004674", label: protein serine/threonine kinase activity}
-      expected: yes
-  A0ABQ0J1P6:
-    - task: ask-domain
-      params: {accession: PF00069, name: Pkinase}
-      expected: no
-      note: "decoy: a kinase domain on an ABC ATPase"
+  - id: Q2PAY3_wt                       # the id in the FASTA file
+    claims:
+      - task: ask-catalytic-residue     # which ask template
+        params: {position: 436, residue: D}
+        expected: yes                   # optional: the verdict you expect
+        note: catalytic Asp of the HRD motif   # optional: kept with the result
+      - task: ask-function
+        params: {term: "GO:0004674", label: protein serine/threonine kinase activity}
+        expected: yes
+  - id: A0ABQ0J1P6
+    claims:
+      - task: ask-domain
+        params: {accession: PF00069, name: Pkinase}
+        expected: no
+        note: "decoy: a kinase domain on an ABC ATPase"
 ```
 
 [`examples/claims.yaml`](../examples/claims.yaml) is a complete example. It has ten claims about the three
@@ -49,22 +51,46 @@ claims:
 
 | Field | Required | Meaning |
 |---|---|---|
-| protein id (key under `proteins`), or `id` | yes | the first word of the protein's FASTA header |
+| `id` | yes | the first word of the protein's FASTA header (on each protein, or on each claim in a flat list) |
 | `task` | yes | an ask template (below) |
 | `params` | yes | that template's parameters, all of them, and no others |
 | `expected` | no | `yes`, `no` or `uncertain`: the verdict you expect. It is never sent to the model and is not part of the cache key |
 | `note` | no | any text. It is kept with the result and never sent |
 
 Quote values that YAML would otherwise read as something else: GO ids (`"GO:0004674"`), and any text with a
-colon followed by a space. An unquoted `yes` or `no` after `expected:` is read as intended.
+colon followed by a space. peptalk reads YAML with the YAML 1.2 rules, so an unquoted `yes` or `no` is text,
+as intended.
 
 Every claim is checked before any question is asked. An unknown task, a misspelt parameter or a missing one
 stops the run with the place of the problem:
 
 ```
 Error in claims file:
-claims.yaml: proteins → Q2PAY3_wt → 1: ask-catalytic-residue takes no postion (it takes position, residue); missing position
+claims.yaml: proteins → 1 → (Q2PAY3_wt) → claims → 1: ask-catalytic-residue takes no postion (it takes position, residue); missing position
 ```
+
+## The schema
+
+The format is defined in LinkML, in [`src/peptalk/datamodel/peptalk.yaml`](../src/peptalk/datamodel/peptalk.yaml)
+(class `ClaimsFile`). That file is the single source of truth. The Pydantic models peptalk validates with, and a
+JSON Schema, are generated from it (`just gen-schema`):
+
+- **JSON Schema:** [`claims.schema.json`](../src/peptalk/datamodel/claims.schema.json). Editors that understand
+  JSON Schema check a claims file as you type. `examples/claims.yaml` points the YAML language server at it on
+  its first line:
+
+  ```yaml
+  # yaml-language-server: $schema=https://raw.githubusercontent.com/ai4curation/peptalk/main/src/peptalk/datamodel/claims.schema.json
+  ```
+
+- **Reference pages:** [ClaimsFile](schema/ClaimsFile.md), [ProteinClaims](schema/ProteinClaims.md),
+  [ClaimBody](schema/ClaimBody.md) and [Claim](schema/Claim.md), generated with `gen-doc`.
+
+The schema fixes the shape: which fields exist, which are required, and the verdicts allowed. What it cannot
+say, that each claim's `params` are exactly those of its template, peptalk checks when it reads the file. The
+result records (below) have their own class in the same schema, `Annotation`, with
+[`annotation.schema.json`](../src/peptalk/datamodel/annotation.schema.json) and the page
+[Annotation](schema/Annotation.md).
 
 ## Ask templates and their parameters
 
@@ -94,7 +120,7 @@ Lines starting with `#` are comments. The format follows the file extension: `.y
 
 ## Output
 
-Each claim gives one record, like any other answer. It carries the parsed `answer` (`verdict`, `reason`, and
+Each claim gives one record, like any other answer (an [`Annotation`](schema/Annotation.md)). It carries the parsed `answer` (`verdict`, `reason`, and
 any payload such as `confidence`), the claim's `params`, `expected` and `note`, and the checks. With
 `--shuffle-control` each claim is also asked of a shuffled copy of the sequence, and a "yes" there flags the
 real answer. The summary table (`-f tsv`) shows the verdict in `call` and your `expected` next to it. Here is

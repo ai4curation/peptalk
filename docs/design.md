@@ -108,7 +108,7 @@ ai-gene-review) can be checked one at a time and evaluation sets built from them
 shuffled controls work as for the other templates; a "yes" for a shuffled copy is flagged. The parameters are
 part of the cache key.
 
-## 5. Schemas: Pydantic, not LinkML, for task answers
+## 5. Schemas: LinkML for interchange formats, Pydantic for model answers
 
 The protocol does not change: the prompt asks for JSON in plain text, peptalk takes the last JSON object in the
 reply that carries the requested keys, and validates it against the template's answer model. Structured output
@@ -124,18 +124,31 @@ It stays opt-in because it changes the question:
   ClpP-family protease with structured output.
 - **It differs between providers** in which JSON Schema features they accept and how they enforce them.
 
-**Recommendation: plain Pydantic for task schemas; keep LinkML for the shared record model later.**
+**The rule: LinkML is the single source of truth for interchange schemas.** These are the files people and
+programs exchange:
 
-- **Size.** Each answer model is five to fifteen flat fields. Pydantic gives validation, defaults, lenient extra
-  keys, and the JSON Schema for structured outputs (`model_json_schema()`), with no build step.
-- **Codegen.** LinkML would add a YAML schema per template and a generator (`gen-pydantic`, `gen-json-schema`)
-  whose output must be committed and kept current, plus a heavy development dependency. For schemas this small,
-  that doubles what a template author edits.
-- **No gain yet.** LinkML's strengths are ontology-bound enumerations, inheritance across a large model, and
-  interoperability with other LinkML knowledge bases. They do not apply to a single prompt's answer shape.
-- **Where LinkML would earn its keep.** The record model for a pooled, searchable database (`docs/shared-database.md`),
-  with SO and GO bindings and mappings to other curation resources. Define that record in LinkML when the
-  database is built, and generate its Pydantic classes then.
+- **claims files** (class `ClaimsFile`);
+- **annotation records**, the rows of the store, of JSONL and Parquet exports and of a future shared database
+  (class `Annotation`, with `Usage` and `Check`).
+
+Both are defined in [`src/peptalk/datamodel/peptalk.yaml`](../src/peptalk/datamodel/peptalk.yaml), and
+`just gen-schema` generates from it:
+
+- `src/peptalk/datamodel/peptalk.py`, Pydantic models that import only pydantic and the standard library;
+- `claims.schema.json` and `annotation.schema.json`;
+- reference pages in [docs/schema/](schema/index.md).
+
+The generated files are committed, and `tests/test_datamodel.py` (run in CI) fails if regenerating them gives
+any difference. LinkML is a development dependency only: nothing at runtime imports linkml or linkml-runtime.
+The runtime code subclasses the generated models only to give empty defaults and to add checks the schema
+cannot express, such as a claim's parameters matching its template; a test checks that the subclasses add no
+fields.
+
+**Per-template answer models stay hand-written Pydantic.** These are the shapes asked of the model in each
+prompt, and their JSON Schema is what `--structured` sends. Each is five to fifteen flat fields, written next to
+the prompt it belongs to. Generating each from a LinkML file would double what a template author edits, without
+the benefits LinkML brings to shared formats: ontology-bound enumerations, documentation, and interoperability
+with other LinkML resources.
 
 `peptalk tasks --schema NAME` and `GET /tasks/{name}/schema` print a template's JSON Schema.
 
