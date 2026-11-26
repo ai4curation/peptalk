@@ -231,8 +231,9 @@ Each result is an `Annotation` (a Pydantic model). It carries the parsed `answer
 
 Each sequence is sent alone, wrapped at 60 residues. Blind and with no payload, the three fs2f prompts are
 exactly the study's, which the tests check byte for byte. A task's prompt version is a hash of its prompt file,
-so an edited prompt never shares stored answers with the old one. Writing a new task is a prompt file and a
-small Python module: see [docs/templates.md](https://github.com/ai4curation/peptalk/blob/main/docs/templates.md).
+so an edited prompt never shares stored answers with the old one. A new task is a prompt file, a LinkML answer
+schema (from which the Pydantic model and JSON Schema are generated) and a few Python hooks; see
+[docs/templates.md](https://github.com/ai4curation/peptalk/blob/main/docs/templates.md).
 
 ## Header context
 
@@ -352,7 +353,7 @@ The record format, like the claims file format, is defined in LinkML
 ([`src/peptalk/datamodel/peptalk.yaml`](https://github.com/ai4curation/peptalk/blob/main/src/peptalk/datamodel/peptalk.yaml),
 class `Annotation`). It comes with a generated JSON Schema
 ([`annotation.schema.json`](https://github.com/ai4curation/peptalk/blob/main/src/peptalk/datamodel/annotation.schema.json))
-and [reference pages](https://github.com/ai4curation/peptalk/blob/main/docs/schema/Annotation.md).
+and [reference pages](https://github.com/ai4curation/peptalk/blob/main/docs/schema/classes/Annotation.md).
 
 ## Cost
 
@@ -405,12 +406,17 @@ just test     # pytest and doctests
 just check    # ruff, mypy, tests
 just build    # sdist and wheel in dist/
 just smoke    # live calls with Claude Haiku 5.5 on examples/proteins.fasta (about one cent)
-just gen-schema  # regenerate Pydantic, JSON Schemas and docs/schema from the LinkML schema (needs the dev group)
+just gen-schema  # regenerate everything generated from LinkML (needs the dev group)
 ```
 
-The interchange formats (claims files, annotation records) are defined in LinkML in
-`src/peptalk/datamodel/peptalk.yaml`. After editing it, run `just gen-schema` and commit the generated files; a
-test fails if they are out of date. LinkML is needed only for development, never at runtime.
+Everything shared is defined in LinkML:
+
+- **interchange formats** (claims files, annotation records): `src/peptalk/datamodel/peptalk.yaml`;
+- **each template's answer:** `schema.yaml` next to its `prompt.txt`.
+
+After editing either, run `just gen-schema` and commit the generated Pydantic models and JSON Schemas; a test
+fails if they are out of date. A plugin's template is generated with `peptalk templates generate PATH` (needs
+`pip install 'peptalk-llm[linkml]'`). LinkML is needed only to generate, never at runtime.
 
 The tests call no model. `tests/data` holds one fs2f FEAT protein and the ROP17 kinase with its catalytic
 Asp436Asn mutant, with the replies Fable 5.2 gave to them in fs2f.

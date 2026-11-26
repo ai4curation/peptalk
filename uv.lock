@@ -1734,6 +1734,9 @@ all = [
 gemini = [
     { name = "google-genai" },
 ]
+linkml = [
+    { name = "linkml" },
+]
 openai = [
     { name = "openai" },
 ]
@@ -1763,6 +1766,7 @@ requires-dist = [
     { name = "fastapi", marker = "extra == 'server'", specifier = ">=0.165.0" },
     { name = "google-genai", marker = "extra == 'all'", specifier = ">=3.6.1" },
     { name = "google-genai", marker = "extra == 'gemini'", specifier = ">=3.6.1" },
+    { name = "linkml", marker = "extra == 'linkml'", specifier = ">=1.10" },
     { name = "openai", marker = "extra == 'all'", specifier = ">=3.59.0" },
     { name = "openai", marker = "extra == 'openai'", specifier = ">=3.59.0" },
     { name = "pyarrow", marker = "extra == 'all'", specifier = ">=26.0.1" },
@@ -1773,7 +1777,7 @@ requires-dist = [
     { name = "uvicorn", marker = "extra == 'all'", specifier = ">=0.54.0" },
     { name = "uvicorn", marker = "extra == 'server'", specifier = ">=0.54.0" },
 ]
-provides-extras = ["all", "gemini", "openai", "parquet", "server"]
+provides-extras = ["all", "gemini", "linkml", "openai", "parquet", "server"]
 
 [package.metadata.requires-dev]
 dev = [

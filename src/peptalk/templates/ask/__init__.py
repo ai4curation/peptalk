@@ -16,25 +16,12 @@ True
 
 from __future__ import annotations
 
-from typing import Any, Literal
+from typing import Any
 
 from peptalk.checks import PFAM_ACCESSION, identifiers_check, ranges_check, residues_check
-from peptalk.schema import AnswerModel, Check, Feature
+from peptalk.schema import Check, Feature
 from peptalk.templates import Template, read_prompt
-
-
-class Verdict(AnswerModel):
-    verdict: Literal["yes", "no", "uncertain"] | None = None
-    reason: str | None = None
-
-
-class ResidueVerdict(Verdict):
-    residue_found: str | None = None
-
-
-class DomainVerdict(Verdict):
-    start: int | None = None
-    end: int | None = None
+from peptalk.templates.ask.schema import DomainVerdict, ResidueVerdict, Verdict
 
 
 def control_signal(a: Any) -> str | None:

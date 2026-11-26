@@ -1,0 +1,43 @@
+id: https://w3id.org/ai4curation/peptalk/templates/localization
+name: peptalk_localization
+title: Answer schema of the localization template
+license: MIT
+prefixes:
+  linkml: https://w3id.org/linkml/
+  peptalk: https://w3id.org/ai4curation/peptalk/
+default_prefix: peptalk
+default_range: string
+imports:
+  - linkml:types
+  - peptalk_common
+
+classes:
+  TargetingSignal:
+    attributes:
+      type:
+        description: >-
+          signal peptide, mitochondrial transit peptide, chloroplast transit peptide, nuclear localization
+          signal, peroxisomal targeting signal, or other.
+      start:
+        range: integer
+      end:
+        range: integer
+  Answer:
+    is_a: AnswerBase
+    annotations:
+      answer: true
+    description: Subcellular location, targeting signals with boundaries, transmembrane helices.
+    slots:
+      - transmembrane_helices
+    attributes:
+      localization:
+        description: Compartment names, most likely first.
+        multivalued: true
+      targeting_signals:
+        range: TargetingSignal
+        multivalued: true
+        inlined_as_list: true
+      protein_name:
+      recognised:
+        range: boolean
+      reason:

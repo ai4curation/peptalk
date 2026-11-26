@@ -10,23 +10,12 @@
 
 from __future__ import annotations
 
-from typing import Any, Literal
-
-from pydantic import Field
+from typing import Any
 
 from peptalk.checks import residues_check
-from peptalk.schema import AnswerModel, CatalyticResidue, Check, Feature, SubstitutedResidue
+from peptalk.schema import Check, Feature
 from peptalk.templates import Template, read_prompt
-
-
-class Answer(AnswerModel):
-    protein_name: str | None = None
-    enzyme_family: str | None = None
-    catalytic_residues: list[CatalyticResidue] = Field(default_factory=list)
-    substituted_or_missing: list[SubstitutedResidue] = Field(default_factory=list)
-    catalytically_active: Literal["yes", "no", "uncertain"] | None = None
-    ec_number: str | None = None
-    reason: str | None = None
+from peptalk.templates.active_site.schema import Answer
 
 
 def checks(a: Any, seq: str, params: dict[str, str] | None = None) -> list[Check]:
@@ -35,7 +24,7 @@ def checks(a: Any, seq: str, params: dict[str, str] | None = None) -> list[Check
         out.append(
             residues_check(seq, [(r.position, r.residue) for r in a.catalytic_residues], "residues_match_sequence")
         )
-    found = [(r.position, r.found) for r in a.substituted_or_missing if r.found and len(r.found) == 1]
+    found = [(r.position, r.found) for r in a.substituted_or_missing or [] if r.found and len(r.found) == 1]
     if found:
         out.append(residues_check(seq, found, "substitutions_match_sequence"))
     return out
@@ -47,11 +36,11 @@ def control_signal(a: Any) -> str | None:
 
 def features(a: Any) -> list[Feature]:
     out = []
-    for r in a.catalytic_residues:
+    for r in a.catalytic_residues or []:
         if r.position is not None:
             attrs = {"role": r.role or "", "residue": r.residue or "", "status": "present"}
             out.append(Feature(type="catalytic_residue", start=r.position, end=r.position, attributes=attrs))
-    for r in a.substituted_or_missing:
+    for r in a.substituted_or_missing or []:
         if r.position is not None:
             attrs = {
                 "role": r.role or "",

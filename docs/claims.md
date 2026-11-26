@@ -83,14 +83,14 @@ JSON Schema, are generated from it (`just gen-schema`):
   # yaml-language-server: $schema=https://raw.githubusercontent.com/ai4curation/peptalk/main/src/peptalk/datamodel/claims.schema.json
   ```
 
-- **Reference pages:** [ClaimsFile](schema/ClaimsFile.md), [ProteinClaims](schema/ProteinClaims.md),
-  [ClaimBody](schema/ClaimBody.md) and [Claim](schema/Claim.md), generated with `gen-doc`.
+- **Reference pages:** [ClaimsFile](schema/classes/ClaimsFile.md), [ProteinClaims](schema/classes/ProteinClaims.md),
+  [ClaimBody](schema/classes/ClaimBody.md) and [Claim](schema/classes/Claim.md), generated with `gen-doc`.
 
 The schema fixes the shape: which fields exist, which are required, and the verdicts allowed. What it cannot
 say, that each claim's `params` are exactly those of its template, peptalk checks when it reads the file. The
 result records (below) have their own class in the same schema, `Annotation`, with
 [`annotation.schema.json`](../src/peptalk/datamodel/annotation.schema.json) and the page
-[Annotation](schema/Annotation.md).
+[Annotation](schema/classes/Annotation.md).
 
 ## Ask templates and their parameters
 
@@ -120,7 +120,7 @@ Lines starting with `#` are comments. The format follows the file extension: `.y
 
 ## Output
 
-Each claim gives one record, like any other answer (an [`Annotation`](schema/Annotation.md)). It carries the parsed `answer` (`verdict`, `reason`, and
+Each claim gives one record, like any other answer (an [`Annotation`](schema/classes/Annotation.md)). It carries the parsed `answer` (`verdict`, `reason`, and
 any payload such as `confidence`), the claim's `params`, `expected` and `note`, and the checks. With
 `--shuffle-control` each claim is also asked of a shuffled copy of the sequence, and a "yes" there flags the
 real answer. The summary table (`-f tsv`) shows the verdict in `call` and your `expected` next to it. Here is

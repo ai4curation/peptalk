@@ -12,20 +12,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import Field
-
 from peptalk.checks import PFAM_ACCESSION, identifiers_check, ranges_check
-from peptalk.schema import AnswerModel, Check, Feature, PfamDomain, Range
+from peptalk.schema import Check, Feature
 from peptalk.templates import Template, read_prompt
-
-
-class Answer(AnswerModel):
-    pfam_domains: list[PfamDomain] = Field(default_factory=list)
-    transmembrane_helices: list[Range] = Field(default_factory=list)
-    signal_peptide: bool | None = None
-    protein_name: str | None = None
-    ec_number: str | None = None
-    function: str | None = None
+from peptalk.templates.features.schema import Answer, PfamDomain
 
 
 def checks(a: Answer, seq: str, params: dict[str, str] | None = None) -> list[Check]:
@@ -57,8 +47,8 @@ def domain_features(domains: list[PfamDomain]) -> list[Feature]:
 
 def features(a: Answer) -> list[Feature]:
     """Domains and TM helices. The signal peptide is a yes/no answer here, with no coordinates, so it is left out."""
-    tm = [Feature(type="transmembrane_polypeptide_region", start=s, end=e) for s, e in a.transmembrane_helices]
-    return domain_features(a.pfam_domains) + tm
+    tm = [Feature(type="transmembrane_polypeptide_region", start=s, end=e) for s, e in a.transmembrane_helices or []]
+    return domain_features(a.pfam_domains or []) + tm
 
 
 def headline(x: dict[str, Any]) -> str:

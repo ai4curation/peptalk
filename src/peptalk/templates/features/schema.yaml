@@ -1,0 +1,33 @@
+id: https://w3id.org/ai4curation/peptalk/templates/features
+name: peptalk_features
+title: Answer schema of the features template
+license: MIT
+prefixes:
+  linkml: https://w3id.org/linkml/
+  peptalk: https://w3id.org/ai4curation/peptalk/
+default_prefix: peptalk
+default_range: string
+imports:
+  - linkml:types
+  - peptalk_common
+
+classes:
+  Answer:
+    is_a: AnswerBase
+    annotations:
+      answer: true
+    description: Pfam domains with boundaries, transmembrane helices, signal peptide, name, EC number, function.
+    slots:
+      - transmembrane_helices
+    attributes:
+      pfam_domains:
+        description: Pfam domains (empty if none recognised).
+        range: PfamDomain
+        multivalued: true
+        inlined_as_list: true
+      signal_peptide:
+        range: boolean
+      protein_name:
+      ec_number:
+      function:
+        description: One sentence.

@@ -43,14 +43,23 @@ def test_json_schema_is_current(linkml, top, name):
 
 def test_docs_are_current(linkml, tmp_path):
     subprocess.run(
-        [str(Path(sys.executable).parent / "gen-doc"), "--directory", str(tmp_path), str(SOURCE)],
+        [
+            str(Path(sys.executable).parent / "gen-doc"),
+            "--subfolder-type-separation",
+            "--directory",
+            str(tmp_path),
+            str(SOURCE),
+        ],
         check=True,
         capture_output=True,
     )
     committed = ROOT / "docs" / "schema"
-    names = sorted(p.name for p in tmp_path.iterdir())
-    assert names == sorted(p.name for p in committed.iterdir()), "run `just gen-schema`"
-    for name in names:
+
+    def files(root: Path) -> list[str]:
+        return sorted(str(p.relative_to(root)) for p in root.rglob("*") if p.is_file())
+
+    assert files(tmp_path) == files(committed), "run `just gen-schema`"
+    for name in files(tmp_path):
         assert (tmp_path / name).read_text() == (committed / name).read_text(), (
             f"docs/schema/{name}: run `just gen-schema`"
         )

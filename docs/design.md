@@ -108,7 +108,7 @@ ai-gene-review) can be checked one at a time and evaluation sets built from them
 shuffled controls work as for the other templates; a "yes" for a shuffled copy is flagged. The parameters are
 part of the cache key.
 
-## 5. Schemas: LinkML for interchange formats, Pydantic for model answers
+## 5. Schemas: LinkML for everything shared, generated Pydantic at runtime
 
 The protocol does not change: the prompt asks for JSON in plain text, peptalk takes the last JSON object in the
 reply that carries the requested keys, and validates it against the template's answer model. Structured output
@@ -140,15 +140,21 @@ Both are defined in [`src/peptalk/datamodel/peptalk.yaml`](../src/peptalk/datamo
 
 The generated files are committed, and `tests/test_datamodel.py` (run in CI) fails if regenerating them gives
 any difference. LinkML is a development dependency only: nothing at runtime imports linkml or linkml-runtime.
-The runtime code subclasses the generated models only to give empty defaults and to add checks the schema
-cannot express, such as a claim's parameters matching its template; a test checks that the subclasses add no
-fields.
+The runtime code subclasses the generated interchange models only to give empty defaults and to add checks the
+schema cannot express, such as a claim's parameters matching its template; a test checks that the subclasses add
+no fields.
 
-**Per-template answer models stay hand-written Pydantic.** These are the shapes asked of the model in each
-prompt, and their JSON Schema is what `--structured` sends. Each is five to fifteen flat fields, written next to
-the prompt it belongs to. Generating each from a LinkML file would double what a template author edits, without
-the benefits LinkML brings to shared formats: ontology-bound enumerations, documentation, and interoperability
-with other LinkML resources.
+**Template answer schemas are LinkML too.** A template is a prompt plus a schema: `prompt.txt` next to a
+LinkML `schema.yaml`. `peptalk templates generate` (and `just gen-schema` for the built-in templates) writes
+that template's Pydantic models (`schema.py`, pydantic-only imports) and the JSON Schema of each answer class.
+The shared building blocks (payload keys, domains, residues, GO terms, `[start, end]` ranges) are in
+`src/peptalk/templates/common.yaml`. Plugins follow the same steps ([templates.md](templates.md)).
+
+Before an answer schema is sent as structured output it is cleaned up deterministically and adapted per provider
+(`peptalk.structured`): Anthropic's SDK transform, OpenAI's strict form, Gemini as is. A test checks every
+template's schema against each provider's documented subset. JSON Schemas are generated without explicit nulls,
+so an optional field is simply not required; the OpenAI strict form adds the nulls back, because strict mode
+requires every property.
 
 `peptalk tasks --schema NAME` and `GET /tasks/{name}/schema` print a template's JSON Schema.
 

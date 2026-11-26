@@ -1,0 +1,39 @@
+id: https://w3id.org/ai4curation/peptalk/templates/function
+name: peptalk_function
+title: Answer schema of the function template
+license: MIT
+prefixes:
+  linkml: https://w3id.org/linkml/
+  peptalk: https://w3id.org/ai4curation/peptalk/
+default_prefix: peptalk
+default_range: string
+imports:
+  - linkml:types
+  - peptalk_common
+
+classes:
+  Answer:
+    is_a: AnswerBase
+    annotations:
+      answer: true
+    description: Function summary with GO-style molecular function, process and component terms.
+    attributes:
+      protein_name:
+      family:
+      summary:
+        description: One or two sentences on what the protein does.
+      molecular_function:
+        range: GoTerm
+        multivalued: true
+        inlined_as_list: true
+      biological_process:
+        range: GoTerm
+        multivalued: true
+        inlined_as_list: true
+      cellular_component:
+        range: GoTerm
+        multivalued: true
+        inlined_as_list: true
+      ec_number:
+      recognised:
+        range: boolean

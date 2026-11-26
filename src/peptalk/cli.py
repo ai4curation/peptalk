@@ -44,6 +44,11 @@ app = typer.Typer(
 )
 batch_app = typer.Typer(help="Provider batch APIs: half price, results within 24 hours.", no_args_is_help=True)
 app.add_typer(batch_app, name="batch")
+templates_app = typer.Typer(
+    help="Template schemas: generate a template's Pydantic and JSON Schema from its LinkML schema.yaml.",
+    no_args_is_help=True,
+)
+app.add_typer(templates_app, name="templates")
 
 DEFAULT_MODEL = "claude-fable-5-2"
 DEFAULT_EFFORT = "high"
@@ -555,6 +560,50 @@ def shuffle(fasta: FastaArg, output: OutOpt = None) -> None:
         output.write_text(text)
     else:
         typer.echo(text, nl=False)
+
+
+SchemaPathsArg = Annotated[
+    list[Path], typer.Argument(help="Template schema files (schema.yaml) or the folders that hold them.")
+]
+
+
+def _schema_files(paths: list[Path]) -> list[Path]:
+    files = [p / "schema.yaml" if p.is_dir() else p for p in paths]
+    missing = [str(f) for f in files if not f.exists()]
+    if missing:
+        raise typer.BadParameter(f"no such schema: {', '.join(missing)}")
+    return files
+
+
+def _codegen():  # type: ignore[no-untyped-def]
+    try:
+        import linkml  # noqa: F401
+    except ImportError as e:
+        raise typer.BadParameter("generating schemas needs LinkML: pip install 'peptalk-llm[linkml]'") from e
+    from peptalk import codegen
+
+    return codegen
+
+
+@templates_app.command("generate")
+def templates_generate(paths: SchemaPathsArg) -> None:
+    """Write schema.py (Pydantic) and <Class>.schema.json next to each template's LinkML schema.yaml."""
+    codegen = _codegen()
+    for f in _schema_files(paths):
+        for written in codegen.write(f):
+            typer.echo(f"wrote {written}", err=True)
+
+
+@templates_app.command("check")
+def templates_check(paths: SchemaPathsArg) -> None:
+    """Fail if any generated file is missing or differs from what its schema.yaml generates now."""
+    codegen = _codegen()
+    stale = [p for f in _schema_files(paths) for p in codegen.stale(f)]
+    for p in stale:
+        typer.echo(f"out of date: {p}", err=True)
+    if stale:
+        raise typer.Exit(1)
+    typer.echo("generated files are current", err=True)
 
 
 @batch_app.command("submit")

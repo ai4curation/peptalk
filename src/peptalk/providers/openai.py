@@ -15,12 +15,13 @@ from openai.types.responses import Response
 
 from peptalk.providers.base import BatchStatus, ProviderError
 from peptalk.schema import Completion, Usage
+from peptalk.structured import openai_strict
 
 DONE_STATES = {"completed", "failed", "expired", "cancelled"}
 
 
 def request_body(prompt: str, model: str, effort: str, schema: dict[str, Any] | None = None) -> dict[str, Any]:
-    """The Responses API body for one question; with a schema, structured output (not strict) constrains the reply.
+    """The Responses API body for one question; with a schema, strict structured output constrains the reply.
 
     >>> request_body("hi", "gpt-6", "high")
     {'model': 'gpt-6', 'input': 'hi', 'reasoning': {'effort': 'high'}}
@@ -29,7 +30,9 @@ def request_body(prompt: str, model: str, effort: str, schema: dict[str, Any] | 
     """
     body: dict[str, Any] = {"model": model, "input": prompt, "reasoning": {"effort": effort}}
     if schema is not None:
-        body["text"] = {"format": {"type": "json_schema", "name": "answer", "schema": schema, "strict": False}}
+        body["text"] = {
+            "format": {"type": "json_schema", "name": "answer", "schema": openai_strict(schema), "strict": True}
+        }
     return body
 
 

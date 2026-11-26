@@ -8,6 +8,13 @@
     `annotation.schema.json` and the reference pages in `docs/schema/`.
   - The generated files are committed, and a test fails if they are out of date.
   - LinkML is a development dependency only.
+- **Template answers are LinkML too:** each template is `prompt.txt` plus `schema.yaml`.
+  - `peptalk templates generate PATH` (and `just gen-schema`) writes the template's Pydantic models and JSON
+    Schemas; `peptalk templates check PATH` reports stale files.
+  - Shared building blocks are in `templates/common.yaml`, and `pip install 'peptalk-llm[linkml]'` provides the
+    generator for plugin authors.
+  - Structured-output schemas are cleaned up and adapted per provider (Anthropic transform, OpenAI strict, Gemini).
+    A test checks each template against each provider's subset.
 - **Claims files in YAML:** claims grouped by protein (`proteins: [{id, claims}]`) or a flat list. Each claim is validated against its
   template, and errors name the claim. TSV and CSV are still accepted for bulk input, chosen by file extension.
 - **`expected` and `note`:** optional fields on a claim, never sent to the model and not part of the cache key.

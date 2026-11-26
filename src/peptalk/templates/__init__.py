@@ -26,7 +26,9 @@ True
 from __future__ import annotations
 
 import hashlib
+import json
 import re
+import sys
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from importlib.metadata import entry_points
@@ -233,8 +235,20 @@ class Template:
         return True
 
     def json_schema(self) -> dict[str, Any]:
-        """JSON Schema of the answer, for opt-in structured outputs and for documentation."""
-        return self.answer_model.model_json_schema()
+        """JSON Schema of the answer, for opt-in structured outputs and for documentation.
+
+        It is the ``<Class>.schema.json`` generated from the template's LinkML schema (next to the module that
+        defines the answer class), cleaned up by :func:`peptalk.structured.answer_schema`.
+        """
+        from peptalk.structured import answer_schema
+
+        module = sys.modules[self.answer_model.__module__]
+        path = Path(str(module.__file__)).parent / f"{self.answer_model.__name__}.schema.json"
+        if not path.exists():
+            raise FileNotFoundError(
+                f"{path} is missing: run `peptalk templates generate {path.parent / 'schema.yaml'}`"
+            )
+        return answer_schema(json.loads(path.read_text()))
 
 
 TEMPLATES: dict[str, Template] = {}

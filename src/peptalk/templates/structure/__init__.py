@@ -14,30 +14,18 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import Field
-
 from peptalk.checks import ranges_check, residues_check
-from peptalk.schema import AnswerModel, Check, Feature, FunctionalResidue, Range
+from peptalk.schema import Check, Feature
 from peptalk.templates import Template, read_prompt
-
-
-class Answer(AnswerModel):
-    helices: list[Range] = Field(default_factory=list)
-    strands: list[Range] = Field(default_factory=list)
-    fold: str | None = None
-    contacts: list[Range] = Field(default_factory=list)
-    protein_name: str | None = None
-    function: str | None = None
-    functional_residues: list[FunctionalResidue] = Field(default_factory=list)
-    recognised: bool | None = None
+from peptalk.templates.structure.schema import Answer
 
 
 def checks(a: Any, seq: str, params: dict[str, str] | None = None) -> list[Check]:
     n, out = len(seq), []
     if a.helices or a.strands:
-        out.append(ranges_check(n, [*a.helices, *a.strands], "secondary_structure_bounds"))
+        out.append(ranges_check(n, [*(a.helices or []), *(a.strands or [])], "secondary_structure_bounds"))
     if a.contacts:
-        bad = [f"{i}-{j}" for i, j in a.contacts if j - i < 24 or i < 1 or j > n]
+        bad = [f"{i}-{j}" for i, j in a.contacts or [] if j - i < 24 or i < 1 or j > n]
         out.append(Check(name="contacts_valid", passed=not bad, detail="; ".join(bad)))
     if a.functional_residues:
         out.append(
@@ -51,11 +39,11 @@ def control_signal(a: Any) -> str | None:
 
 
 def features(a: Any) -> list[Feature]:
-    helices = [Feature(type="alpha_helix", start=s, end=e) for s, e in a.helices]
-    strands = [Feature(type="beta_strand", start=s, end=e) for s, e in a.strands]
+    helices = [Feature(type="alpha_helix", start=s, end=e) for s, e in a.helices or []]
+    strands = [Feature(type="beta_strand", start=s, end=e) for s, e in a.strands or []]
     sites = [
         Feature(type="polypeptide_region", start=r.position, end=r.position, attributes={"role": r.role or ""})
-        for r in a.functional_residues
+        for r in a.functional_residues or []
         if r.position is not None
     ]
     return helices + strands + sites

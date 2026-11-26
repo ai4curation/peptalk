@@ -10,26 +10,14 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import Field
-
 from peptalk.checks import GO_ID, identifiers_check
-from peptalk.schema import AnswerModel, Check, GoTerm
+from peptalk.schema import Check
 from peptalk.templates import Template, read_prompt
-
-
-class Answer(AnswerModel):
-    protein_name: str | None = None
-    family: str | None = None
-    summary: str | None = None
-    molecular_function: list[GoTerm] = Field(default_factory=list)
-    biological_process: list[GoTerm] = Field(default_factory=list)
-    cellular_component: list[GoTerm] = Field(default_factory=list)
-    ec_number: str | None = None
-    recognised: bool | None = None
+from peptalk.templates.function.schema import Answer
 
 
 def checks(a: Any, seq: str, params: dict[str, str] | None = None) -> list[Check]:
-    terms = [*a.molecular_function, *a.biological_process, *a.cellular_component]
+    terms = [*(a.molecular_function or []), *(a.biological_process or []), *(a.cellular_component or [])]
     return [identifiers_check([t.id for t in terms], GO_ID, "go_id_form")] if terms else []
 
 
