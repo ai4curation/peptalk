@@ -1,0 +1,34 @@
+cff-version: 1.2.0
+message: "If you use peptalk, please cite the preprint below."
+title: "peptalk: protein annotation from sequence with general-purpose language models"
+type: software
+authors:
+  - family-names: Mungall
+    given-names: Christopher J.
+  - family-names: Joachimiak
+    given-names: Marcin P.
+repository-code: "https://github.com/ai4curation/peptalk"
+license: MIT
+keywords:
+  - protein
+  - annotation
+  - bioinformatics
+  - llm
+preferred-citation:
+  type: article
+  title: "General-purpose language models are neurosymbolic reasoners able to annotate proteins from sequence"
+  authors:
+    - family-names: Mungall
+      given-names: Christopher J.
+    - family-names: Joachimiak
+      given-names: Marcin P.
+  year: 2026
+  month: 11
+  date-released: 2026-11-21
+  journal: "arXiv"
+  identifiers:
+    - type: other
+      value: "arXiv:2611.28529"
+      description: arXiv identifier
+  doi: "10.48550/arXiv.2611.28529"
+  url: "https://arxiv.org/abs/2611.28529"

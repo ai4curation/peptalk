@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- **Preprint:** the fs2f study is on arXiv ([2611.28529](https://arxiv.org/abs/2611.28529)). The README links it,
+  has a Citing section with BibTeX, and `CITATION.cff` is added. The package metadata has a `Preprint` URL.
+
 ## 0.2.0
 
 - **Interchange formats defined in LinkML:** `src/peptalk/datamodel/peptalk.yaml` is the single source of truth

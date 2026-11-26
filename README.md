@@ -10,9 +10,9 @@ Each question is one direct API call to Anthropic, Gemini or OpenAI: a single us
 and the sequence, with no system prompt, no tools and no agent. Every call is checked against the sequence,
 priced, and logged with full provenance in a local SQLite store, which also serves as the cache. The prompts
 come from the [fable-sequence-to-function](https://github.com/ai4curation/fable-sequence-to-function) study
-(fs2f). The study's manuscript is
-[manuscript.pdf](https://github.com/ai4curation/fable-sequence-to-function/blob/main/manuscript.pdf), with a
-[summary of results](https://ai4curation.io/fable-sequence-to-function/); the preprint is forthcoming.
+(fs2f), described in the preprint [General-purpose language models are neurosymbolic reasoners able to
+annotate proteins from sequence](https://arxiv.org/abs/2611.28529) (arXiv:2611.28529), with a
+[summary of results](https://ai4curation.io/fable-sequence-to-function/).
 
 On PyPI the package is `peptalk-llm`, because the name `peptalk` was too close to an existing project; the
 import and the command are both `peptalk`.
@@ -421,11 +421,27 @@ fails if they are out of date. A plugin's template is generated with `peptalk te
 The tests call no model. `tests/data` holds one fs2f FEAT protein and the ROP17 kinase with its catalytic
 Asp436Asn mutant, with the replies Fable 5.2 gave to them in fs2f.
 
-## Citation
+## Citing
 
-Mungall CJ, Joachimiak MP. General-purpose language models are neurosymbolic reasoners able to annotate
-proteins from sequence. 2026; preprint forthcoming. Manuscript:
-https://github.com/ai4curation/fable-sequence-to-function/blob/main/manuscript.pdf
+If you use peptalk, please cite the preprint:
+
+> Mungall CJ, Joachimiak MP. General-purpose language models are neurosymbolic reasoners able to annotate
+> proteins from sequence. arXiv:2611.28529 [Preprint]. 2026. https://arxiv.org/abs/2611.28529
+
+```bibtex
+@misc{mungall2026neurosymbolic,
+  title         = {General-purpose language models are neurosymbolic reasoners able to annotate proteins from sequence},
+  author        = {Mungall, Christopher J. and Joachimiak, Marcin P.},
+  year          = {2026},
+  eprint        = {2611.28529},
+  archivePrefix = {arXiv},
+  doi           = {10.48550/arXiv.2611.28529},
+  url           = {https://arxiv.org/abs/2611.28529}
+}
+```
+
+[CITATION.cff](CITATION.cff) has the same information in machine-readable form; GitHub shows it as "Cite this
+repository".
 
 ## License
 
