@@ -122,8 +122,10 @@ Before a schema is sent as structured output (`--structured`), peptalk prepares 
 - **Gemini** gets the schema as it is.
 
 A test checks every template's schema, with and without payload keys, against each provider's documented
-subset. In a live run every template passed on Claude Haiku 5.5 and Gemini 3.1 flash-lite. With structured
-output the whole reply is the answer object. `peptalk tasks --schema localization` prints the prepared schema.
+subset. In a live run both Claude Haiku 5.5 and Gemini 3.1 flash-lite accepted every template's schema. Haiku
+answered all ten. Flash-lite ran away to its output limit on `combined` and `function` (an endless contact list,
+an unterminated summary): the schema was accepted, but the reply was cut off. With structured output the whole
+reply is the answer object. `peptalk tasks --schema localization` prints the prepared schema.
 
 ## 5. Write the hooks
 
