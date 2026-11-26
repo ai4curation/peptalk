@@ -50,7 +50,12 @@ def features(a: Any) -> list[Feature]:
 
 
 def headline(x: dict[str, Any]) -> str:
-    return f"{x.get('fold')}; {len(x.get('helices') or [])}H {len(x.get('strands') or [])}E"
+    """Fold and counts of helices and strands.
+
+    >>> headline({"fold": None, "helices": [[1, 9]], "strands": None})
+    '; 1H 0E'
+    """
+    return f"{x.get('fold') or ''}; {len(x.get('helices') or [])}H {len(x.get('strands') or [])}E"
 
 
 TEMPLATE = Template(

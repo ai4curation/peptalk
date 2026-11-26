@@ -124,7 +124,9 @@ Before a schema is sent as structured output (`--structured`), peptalk prepares 
 A test checks every template's schema, with and without payload keys, against each provider's documented
 subset. In a live run both Claude Haiku 5.5 and Gemini 3.1 flash-lite accepted every template's schema. Haiku
 answered all ten. Flash-lite ran away to its output limit on `combined` and `function` (an endless contact list,
-an unterminated summary): the schema was accepted, but the reply was cut off. With structured output the whole
+an unterminated summary): the schema was accepted, but the reply was cut off. OpenAI GPT-6.2 Sol and GPT-6.2
+Astra both accepted every template's strict schema, live and through the Batch API, and answered all of them.
+Strict mode sends every key, with null where there is no value. With structured output the whole
 reply is the answer object. `peptalk tasks --schema localization` prints the prepared schema.
 
 ## 5. Write the hooks

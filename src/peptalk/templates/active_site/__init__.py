@@ -53,8 +53,15 @@ def features(a: Any) -> list[Feature]:
 
 
 def headline(x: dict[str, Any]) -> str:
+    """One line: activity and lost residues. Nulls (OpenAI strict mode sends every key) print as nothing.
+
+    >>> headline({"catalytically_active": "no", "substituted_or_missing": [
+    ...     {"expected": "D", "position": 436, "found": "N"}, {"expected": "D", "position": None, "found": None}]})
+    'active=no lost D436N,D'
+    """
     subs = [
-        f"{s.get('expected')}{s.get('position') or ''}{s.get('found')}" for s in x.get("substituted_or_missing") or []
+        f"{s.get('expected') or ''}{s.get('position') or ''}{s.get('found') or ''}"
+        for s in x.get("substituted_or_missing") or []
     ]
     return f"active={x.get('catalytically_active')}" + (f" lost {','.join(subs)}" if subs else "")
 

@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+- **`ask --structured` and `ask --concurrency`:** claims files can use structured output, as `annotate` and
+  `batch submit` already could.
+- **Null-safe summary lines:** `active-site` (and `combined`) printed `None` for a substitution with no found
+  residue or position, and `structure` for a missing fold. OpenAI strict mode sends these as explicit nulls.
+- **OpenAI provider run live** with GPT-6.2 Sol and Astra: the input-token check passed on every call, every
+  template's strict schema was accepted, `examples/claims.yaml` ran with and without `--structured`, and a
+  Batch API job completed.
+
 ## 0.2.0
 
 - **Interchange formats defined in LinkML:** `src/peptalk/datamodel/peptalk.yaml` is the single source of truth
