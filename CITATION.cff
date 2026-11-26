@@ -5,8 +5,10 @@ type: software
 authors:
   - family-names: Mungall
     given-names: Christopher J.
+    orcid: "https://orcid.org/0000-0002-6601-2165"
   - family-names: Joachimiak
     given-names: Marcin P.
+    orcid: "https://orcid.org/0000-0001-8175-045X"
 repository-code: "https://github.com/ai4curation/peptalk"
 license: MIT
 keywords:
@@ -20,8 +22,10 @@ preferred-citation:
   authors:
     - family-names: Mungall
       given-names: Christopher J.
+      orcid: "https://orcid.org/0000-0002-6601-2165"
     - family-names: Joachimiak
       given-names: Marcin P.
+      orcid: "https://orcid.org/0000-0001-8175-045X"
   year: 2026
   month: 11
   date-released: 2026-11-21
