@@ -12,7 +12,7 @@
 
 from __future__ import annotations
 
-import csv
+import dataclasses
 import datetime
 import json
 import time
@@ -20,12 +20,12 @@ import uuid
 from collections.abc import Callable, Iterable, Sequence
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
-from pathlib import Path
 
 from pydantic import BaseModel, ValidationError
 
 from peptalk import __version__
 from peptalk.checks import control_check, input_check, residues_check
+from peptalk.claims import Claim
 from peptalk.fasta import SequenceRecord, shuffle_sequence
 from peptalk.parse import answer_object, has_tool_call
 from peptalk.pricing import Price, cost, price_for
@@ -53,6 +53,8 @@ class Question:
     context: str = DEFAULT_CONTEXT
     params: dict[str, str] = field(default_factory=dict)
     payload: tuple[str, ...] = ()
+    expected: str | None = None
+    note: str | None = None
 
     @property
     def effective_context(self) -> str:
@@ -96,27 +98,6 @@ def build_questions(
     return out
 
 
-class Claim(BaseModel):
-    """One claim to ask about one sequence: an ask template and its parameters."""
-
-    id: str
-    task: str
-    params: dict[str, str] = {}
-
-
-def read_claims(path: Path | str) -> list[Claim]:
-    """Claims from a TSV file with columns ``id`` (FASTA id), ``task`` and one column per template parameter.
-
-    Empty cells are left out, so one file can mix templates with different parameters.
-    """
-    with open(path, newline="") as fh:
-        rows = list(csv.DictReader(fh, delimiter="\t"))
-    return [
-        Claim(id=r["id"], task=r["task"], params={k: v for k, v in r.items() if k not in ("id", "task") and v})
-        for r in rows
-    ]
-
-
 def claim_questions(
     records: Iterable[SequenceRecord],
     claims: Iterable[Claim],
@@ -137,7 +118,8 @@ def claim_questions(
     for c in claims:
         if c.id not in by_id:
             raise ValueError(f"claim names sequence {c.id!r}, which is not in the FASTA input")
-        out += build_questions([by_id[c.id]], [c.task], shuffle_control, context, c.params, payload)
+        for q in build_questions([by_id[c.id]], [c.task], shuffle_control, context, c.params, payload):
+            out.append(dataclasses.replace(q, expected=c.expected, note=c.note) if q.condition == "real" else q)
     return out
 
 
@@ -193,6 +175,8 @@ def new_annotation(q: Question, provider: Provider, model: str, effort: str, str
         output="json_schema" if structured else "text",
         params=q.params,
         payload=list(q.payload),
+        expected=q.expected,
+        note=q.note,
         header=q.record.header,
         started_at=now(),
     )
@@ -295,7 +279,9 @@ class Annotator:
         hit = self.store.lookup(self.new(q))
         if hit is None:
             return None
-        return hit.model_copy(update={"id": q.record.id, "description": q.record.description, "cached": True})
+        # the stored call is reused; what describes this request (labels, the claim's expectation) is current
+        update = {"id": q.record.id, "description": q.record.description, "expected": q.expected, "note": q.note}
+        return hit.model_copy(update={**update, "cached": True})
 
     def ask(self, q: Question) -> tuple[Question, Annotation, BaseModel | None]:
         hit = self.stored(q)

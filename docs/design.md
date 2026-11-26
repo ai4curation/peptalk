@@ -101,8 +101,9 @@ claim is named by parameters:
 | `ask-function` | `term`, `label` | does the protein have the function of this GO term? |
 | `ask-catalytic-residue` | `position`, `residue` | is this residue catalytic? (also checks the claimed residue is at the position) |
 | `ask-localization` | `compartment` | is the protein located there? |
+| `ask-domain` | `accession`, `name` | does the protein contain this Pfam domain, and where? |
 
-`peptalk ask FASTA --claims claims.tsv` takes one claim per row, so existing annotations (from GO, UniProt or
+`peptalk ask FASTA --claims claims.yaml` takes one question per claim (see [claims.md](claims.md)), so existing annotations (from GO, UniProt or
 ai-gene-review) can be checked one at a time and evaluation sets built from them. Context levels, payloads and
 shuffled controls work as for the other templates; a "yes" for a shuffled copy is flagged. The parameters are
 part of the cache key.

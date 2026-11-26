@@ -15,7 +15,7 @@ A template's ``version`` is the first 12 hex digits of the SHA-256 of its prompt
 makes a new version, and stored answers are never shared between versions.
 
 >>> sorted(TEMPLATES)
-['active-site', 'ask-catalytic-residue', 'ask-function', 'ask-localization', 'combined', 'features', 'function', 'localization', 'structure']
+['active-site', 'ask-catalytic-residue', 'ask-domain', 'ask-function', 'ask-localization', 'combined', 'features', 'function', 'localization', 'structure']
 >>> TEMPLATES["features"].render("MKT").endswith(">sequence\\nMKT")
 True
 >>> print(TEMPLATES["features"].render("MKTAYIA", {"id": "x", "organism": "Homo sapiens", "taxon_id": "9606"},
@@ -254,11 +254,29 @@ def get_template(name: str) -> Template:
     >>> get_template("nope")
     Traceback (most recent call last):
     ...
-    KeyError: "unknown task 'nope'; choose from active-site, ask-catalytic-residue, ask-function, ask-localization, combined, features, function, localization, structure"
+    KeyError: "unknown task 'nope'; choose from active-site, ask-catalytic-residue, ask-domain, ask-function, ask-localization, combined, features, function, localization, structure"
     """
     if name not in TEMPLATES:
         raise KeyError(f"unknown task {name!r}; choose from {', '.join(sorted(TEMPLATES))}")
     return TEMPLATES[name]
+
+
+def params_table(prefix: str = "ask-") -> str:
+    """A Markdown table of the templates whose names start with ``prefix``, and their parameters.
+
+    docs/claims.md embeds this table; a test checks that the copy there is current.
+
+    >>> print(params_table().splitlines()[0])
+    | Template | Parameters (claims-file columns) | Question |
+    """
+    rows = ["| Template | Parameters (claims-file columns) | Question |", "|---|---|---|"]
+    for name in sorted(TEMPLATES):
+        if not name.startswith(prefix):
+            continue
+        t = TEMPLATES[name]
+        params = "<br>".join(f"`{p}`: {desc}" for p, desc in t.params.items()) or "none"
+        rows.append(f"| `{name}` | {params} | {t.summary} |")
+    return "\n".join(rows)
 
 
 def _load_builtin() -> None:

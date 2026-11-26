@@ -153,6 +153,8 @@ class Annotation(BaseModel):
     output: Literal["text", "json_schema"] = "text"
     params: dict[str, str] = Field(default_factory=dict)
     payload: list[str] = Field(default_factory=list)
+    expected: str | None = None
+    note: str | None = None
     header: dict[str, str] = Field(default_factory=dict)
     text: str | None = None
     answer: dict[str, Any] | None = None

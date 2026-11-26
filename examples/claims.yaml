@@ -1,0 +1,55 @@
+# Claims about the proteins in examples/proteins.fasta, one question per claim.
+# Run:  peptalk ask examples/proteins.fasta --claims examples/claims.yaml
+# Each claim names an ask template (task) and its parameters (params). 'expected' and 'note' are optional,
+# are never sent to the model, and are for benchmarks: the totals report how many verdicts match 'expected'.
+# See docs/claims.md, or 'peptalk tasks --ask' for every template and its parameters.
+
+proteins:
+  # Toxoplasma rhoptry kinase ROP17, wild type
+  Q2PAY3_wt:
+    - task: ask-catalytic-residue
+      params: {position: 436, residue: D}
+      expected: yes
+      note: catalytic Asp of the HRD motif (UniProt proton acceptor)
+    - task: ask-catalytic-residue
+      params: {position: 150, residue: R}
+      expected: no
+      note: "decoy: an arginine outside the kinase domain"
+    - task: ask-function
+      params: {term: "GO:0004674", label: protein serine/threonine kinase activity}
+      expected: yes
+      note: an active kinase
+    - task: ask-localization
+      params: {compartment: rhoptry}
+      expected: yes
+      note: ROP17 is a rhoptry protein
+
+  # The same kinase with its catalytic Asp436 changed to Asn
+  Q2PAY3_asp_to_asn:
+    - task: ask-catalytic-residue
+      params: {position: 436, residue: D}
+      expected: no
+      note: "a stale claim: this mutant has N436, which the claim check flags before the verdict is read"
+    - task: ask-function
+      params: {term: "GO:0004674", label: protein serine/threonine kinase activity}
+      expected: no
+      note: "NOT-style: with the catalytic Asp lost, a curator would not assert kinase activity"
+
+  # Phytoplasma ABC transporter ATPase (Mn/Zn transport)
+  A0ABQ0J1P6:
+    - task: ask-domain
+      params: {accession: PF00005, name: ABC_tran}
+      expected: yes
+      note: InterPro places the ABC transporter domain at 24-167
+    - task: ask-domain
+      params: {accession: PF00069, name: Pkinase}
+      expected: no
+      note: "decoy: a kinase domain on an ABC ATPase"
+    - task: ask-function
+      params: {term: "GO:0016887", label: ATP hydrolysis activity}
+      expected: yes
+      note: GO annotation of the UniProt entry
+    - task: ask-localization
+      params: {compartment: nucleus}
+      expected: no
+      note: "decoy: a bacterial protein has no nucleus"

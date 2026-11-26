@@ -43,12 +43,14 @@ The provider follows from the model name (`claude-*`, `gemini-*`, `gpt-*`), or s
 
 The examples use [`examples/proteins.fasta`](https://github.com/ai4curation/peptalk/blob/main/examples/proteins.fasta):
 three proteins from the fs2f tests. They are an ABC transporter ATPase (UniProt A0ABQ0J1P6), the *Toxoplasma*
-kinase ROP17 (Q2PAY3), and ROP17 with its catalytic Asp436 changed to Asn. In a clone of this repository the file
-is already there; otherwise fetch it:
+kinase ROP17 (Q2PAY3), and ROP17 with its catalytic Asp436 changed to Asn. The claims example uses
+[`examples/claims.yaml`](https://github.com/ai4curation/peptalk/blob/main/examples/claims.yaml). In a clone of this
+repository the files are already there; otherwise fetch them:
 
 ```bash
 mkdir -p examples
 curl -sL -o examples/proteins.fasta https://raw.githubusercontent.com/ai4curation/peptalk/main/examples/proteins.fasta
+curl -sL -o examples/claims.yaml https://raw.githubusercontent.com/ai4curation/peptalk/main/examples/claims.yaml
 ```
 
 **Annotate a FASTA file.** Each sequence is asked each task. Records go to `results.jsonl`, and progress and a
@@ -87,13 +89,37 @@ flagged when the shuffled copy also gets a domain, an "active" call or a recogni
 peptalk annotate examples/proteins.fasta -t features --shuffle-control -o results.jsonl
 ```
 
-**Check one claim at a time.** Ask templates put a single claim to the model and get back yes, no or uncertain.
-A claims file has one row per claim:
+**Check specific claims.** A claims file lists claims about your proteins, such as "Asp436 of ROP17 is
+catalytic" or "this protein has the PF00005 domain". Each claim becomes one question, answered yes, no or
+uncertain. Add `expected` to a claim and the totals report how many verdicts agree, which turns a claims file
+into a small benchmark. [`examples/claims.yaml`](https://github.com/ai4curation/peptalk/blob/main/examples/claims.yaml)
+has ten claims about the example proteins, and
+[docs/claims.md](https://github.com/ai4curation/peptalk/blob/main/docs/claims.md) explains the format:
+
+```yaml
+proteins:
+  Q2PAY3_wt:
+    - task: ask-catalytic-residue
+      params: {position: 436, residue: D}
+      expected: yes
+      note: catalytic Asp of the HRD motif (UniProt proton acceptor)
+```
 
 ```bash
-printf 'id\ttask\tposition\tresidue\nQ2PAY3_wt\task-catalytic-residue\t436\tD\n' > claims.tsv
-peptalk ask examples/proteins.fasta --claims claims.tsv -w confidence
+peptalk ask examples/proteins.fasta --claims examples/claims.yaml -w confidence -f tsv
 ```
+
+```
+id                 task                   confidence     call         expected  flags
+Q2PAY3_wt          ask-catalytic-residue  checks_passed  yes (0.85)   yes
+Q2PAY3_asp_to_asn  ask-catalytic-residue  flagged        no (0.80)    no        claim_residue_matches_sequence: D436 is N436
+Q2PAY3_asp_to_asn  ask-function           checks_passed  yes (0.82)   no
+A0ABQ0J1P6         ask-domain             checks_passed  no (0.95)    no
+...
+10 answers (10 new calls, ...); spent $0.0039; 9 of 10 verdicts match expected
+```
+
+(Claude Haiku 5.5 at low effort; four of the ten rows shown.)
 
 **Ask for more than the annotation.** `--with` (`-w`) adds a stated confidence, a short rationale, the residues
 cited as evidence (checked against the sequence), or the alternatives considered. These cost tokens and can
@@ -200,6 +226,7 @@ Each result is an `Annotation` (a Pydantic model). It carries the parsed `answer
 | `ask-function` | new, **untested**; parameters `term`, `label` | does the protein have this GO function? yes / no / uncertain |
 | `ask-catalytic-residue` | new, **untested**; parameters `position`, `residue` | is this residue catalytic? (and is it really at that position?) |
 | `ask-localization` | new, **untested**; parameter `compartment` | is the protein located there? |
+| `ask-domain` | new, **untested**; parameters `accession`, `name` | does the protein contain this Pfam domain, and where? |
 
 Each sequence is sent alone, wrapped at 60 residues. Blind and with no payload, the three fs2f prompts are
 exactly the study's, which the tests check byte for byte. A task's prompt version is a hash of its prompt file,

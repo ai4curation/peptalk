@@ -139,17 +139,12 @@ Template(
 )
 ```
 
-The values come from `--param compartment=nucleus` on `peptalk annotate`, from a claims file on `peptalk ask`
-(one row per claim: `id`, `task`, then one column per parameter), or from `"params"` in the REST API. They are
-part of the cache key. `ask-catalytic-residue` also shows a check that uses its parameters: it confirms that the
-claimed residue is really at the claimed position before anyone reads the verdict.
-
-```text
-id	task	term	label	position	residue
-Q2PAY3_wt	ask-catalytic-residue			436	D
-Q2PAY3_wt	ask-function	GO:0004672	protein kinase activity
-```
+The values come from `--param compartment=nucleus` on `peptalk annotate`, from a claims file on `peptalk ask`,
+or from `"params"` in the REST API. They are part of the cache key. A claims file names the template and its
+parameters for each claim; see [claims.md](claims.md) and [`examples/claims.yaml`](../examples/claims.yaml).
+`ask-catalytic-residue` also shows a check that uses its parameters: it confirms that the claimed residue is
+really at the claimed position before anyone reads the verdict.
 
 ```bash
-peptalk ask examples/proteins.fasta --claims claims.tsv -c blind -w confidence --shuffle-control
+peptalk ask examples/proteins.fasta --claims examples/claims.yaml -c blind -w confidence --shuffle-control
 ```
