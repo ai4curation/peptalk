@@ -49,6 +49,7 @@ peptalk = "peptalk.cli:app"
 [project.urls]
 Homepage = "https://github.com/ai4curation/peptalk"
 Study = "https://github.com/ai4curation/fable-sequence-to-function"
+Preprint = "https://arxiv.org/abs/2611.28529"
 
 [build-system]
 requires = ["hatchling", "uv-dynamic-versioning"]
